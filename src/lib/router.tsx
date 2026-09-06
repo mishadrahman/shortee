@@ -26,15 +26,16 @@ function parseCurrentRoute(): RouteInfo {
     };
   }
 
-  const pathname = window.location.pathname || '/';
+  let pathname = window.location.pathname || '/';
   const search = window.location.search || '';
   const params: Record<string, string> = {};
 
-  // Check for shortcode route: e.g. /aB72xK (single segment path that is not reserved)
+  // If deployed under a GitHub user/repo path (e.g. /my-repo/), remove base segment if needed
   const segments = pathname.split('/').filter(Boolean);
   let isShortCodeRoute = false;
   let shortCode: string | undefined = undefined;
 
+  // Single segment path check for shortcode e.g. /xyz123
   if (segments.length === 1) {
     const first = segments[0];
     if (!RESERVED_ROUTES.has(first.toLowerCase())) {
