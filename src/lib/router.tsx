@@ -12,9 +12,28 @@ export interface RouteInfo {
 interface RouterContextType {
   route: RouteInfo;
   navigate: (to: string, options?: { replace?: boolean }) => void;
+  basePath: string;
 }
 
 const RouterContext = createContext<RouterContextType | null>(null);
+
+/**
+ * Detect GitHub Pages base subpath e.g. /shortee if accessed from username.github.io/shortee
+ */
+export function getAppBasePath(): string {
+  if (typeof window === 'undefined') return '';
+  const pathname = window.location.pathname || '';
+  const hostname = window.location.hostname || '';
+
+  // If on *.github.io, the first segment is the repo name
+  if (hostname.endsWith('.github.io')) {
+    const firstSegment = pathname.split('/').filter(Boolean)[0];
+    if (firstSegment) {
+      return `/${firstSegment}`;
+    }
+  }
+  return '';
+}
 
 function parseCurrentRoute(): RouteInfo {
   if (typeof window === 'undefined') {
@@ -26,12 +45,23 @@ function parseCurrentRoute(): RouteInfo {
     };
   }
 
-  let pathname = window.location.pathname || '/';
+  const rawPathname = window.location.pathname || '/';
   const search = window.location.search || '';
   const params: Record<string, string> = {};
 
-  // If deployed under a GitHub user/repo path (e.g. /my-repo/), remove base segment if needed
-  const segments = pathname.split('/').filter(Boolean);
+  const basePath = getAppBasePath();
+  let normalizedPath = rawPathname;
+
+  if (basePath && normalizedPath.startsWith(basePath)) {
+    normalizedPath = normalizedPath.slice(basePath.length) || '/';
+  }
+
+  if (!normalizedPath.startsWith('/')) {
+    normalizedPath = '/' + normalizedPath;
+  }
+
+  // Check route segments
+  const segments = normalizedPath.split('/').filter(Boolean);
   let isShortCodeRoute = false;
   let shortCode: string | undefined = undefined;
 
@@ -52,7 +82,7 @@ function parseCurrentRoute(): RouteInfo {
   }
 
   return {
-    pathname,
+    pathname: normalizedPath,
     search,
     params,
     isShortCodeRoute,
@@ -62,6 +92,7 @@ function parseCurrentRoute(): RouteInfo {
 
 export const RouterProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [route, setRoute] = useState<RouteInfo>(() => parseCurrentRoute());
+  const basePath = useMemo(() => getAppBasePath(), []);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -81,17 +112,20 @@ export const RouterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return;
     }
 
+    const currentBase = getAppBasePath();
+    const fullTarget = to.startsWith('/') && currentBase ? `${currentBase}${to}` : to;
+
     if (options?.replace) {
-      window.history.replaceState({}, '', to);
+      window.history.replaceState({}, '', fullTarget);
     } else {
-      window.history.pushState({}, '', to);
+      window.history.pushState({}, '', fullTarget);
     }
 
     setRoute(parseCurrentRoute());
     window.scrollTo(0, 0);
   }, []);
 
-  const value = useMemo(() => ({ route, navigate }), [route, navigate]);
+  const value = useMemo(() => ({ route, navigate, basePath }), [route, navigate, basePath]);
 
   return <RouterContext.Provider value={value}>{children}</RouterContext.Provider>;
 };
@@ -103,3 +137,4 @@ export function useAppRouter(): RouterContextType {
   }
   return context;
 }
+

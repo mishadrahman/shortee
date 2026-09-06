@@ -1,4 +1,5 @@
 export const RESERVED_ROUTES = new Set([
+  'shortee',
   'dashboard',
   'login',
   'signup',
@@ -120,7 +121,16 @@ export function buildShortUrl(shortCode: string, displayOnly = false): string {
     return `https://${DEFAULT_BRAND_DOMAIN}/${shortCode}`;
   }
   if (typeof window !== 'undefined') {
-    return `${window.location.origin}/${shortCode}`;
+    const origin = window.location.origin;
+    const hostname = window.location.hostname;
+    // If hosted on username.github.io/repo-name, preserve the repo subpath for valid clickability
+    if (hostname.endsWith('.github.io')) {
+      const firstSegment = window.location.pathname.split('/').filter(Boolean)[0];
+      if (firstSegment) {
+        return `${origin}/${firstSegment}/${shortCode}`;
+      }
+    }
+    return `${origin}/${shortCode}`;
   }
   return `https://${DEFAULT_BRAND_DOMAIN}/${shortCode}`;
 }
