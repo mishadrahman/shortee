@@ -44,22 +44,22 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCreateModal }) => {
       id="main-navbar"
       className="sticky top-0 z-40 w-full border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-950/90 backdrop-blur-md transition-colors"
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-4">
         {/* Brand */}
-        <div className="flex items-center gap-8">
+        <div className="flex items-center gap-4 lg:gap-8 shrink-0">
           <button
             id="brand-logo-btn"
             onClick={() => navigate(currentUser ? '/dashboard' : '/')}
-            className="flex items-center gap-2.5 group text-left focus:outline-none cursor-pointer"
+            className="flex items-center gap-2 sm:gap-2.5 group text-left focus:outline-none cursor-pointer"
           >
-            <div className="w-9 h-9 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center transition-transform group-hover:scale-105 shadow-sm">
-              <Link2 className="w-5 h-5" />
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center transition-transform group-hover:scale-105 shadow-sm shrink-0">
+              <Link2 className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-extrabold text-base tracking-tight text-slate-900 dark:text-white">
+            <div className="flex items-center gap-1 sm:gap-1.5">
+              <span className="font-extrabold text-sm sm:text-base tracking-tight text-slate-900 dark:text-white">
                 Shortee
               </span>
-              <span className="px-1.5 py-0.5 rounded-md text-[10px] font-mono font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+              <span className="px-1 sm:px-1.5 py-0.5 rounded-md text-[9px] sm:text-[10px] font-mono font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                 .xyz
               </span>
             </div>
@@ -137,13 +137,13 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCreateModal }) => {
         </div>
 
         {/* Right Section Actions */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* Quick Shorten CTA if in Dashboard or Logged in */}
           {currentUser && onOpenCreateModal && (
             <button
               id="nav-create-link-cta"
               onClick={onOpenCreateModal}
-              className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 text-xs font-semibold shadow-sm transition-all active:scale-95"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 text-xs font-semibold shadow-sm transition-all active:scale-95 whitespace-nowrap"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Shorten URL</span>
@@ -154,7 +154,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCreateModal }) => {
           <button
             id="theme-toggle-btn"
             onClick={toggleTheme}
-            className="p-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-1.5 sm:p-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0"
             title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
             aria-label="Toggle theme"
           >
@@ -163,16 +163,16 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCreateModal }) => {
 
           {/* User Profile or Sign in buttons */}
           {currentUser ? (
-            <div className="relative">
+            <div className="relative shrink-0">
               <button
                 id="user-profile-menu-btn"
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
-                className="flex items-center gap-2 p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors focus:outline-none"
+                className="flex items-center gap-1.5 sm:gap-2 p-1 sm:p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors focus:outline-none"
               >
-                <div className="w-7 h-7 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 flex items-center justify-center font-bold text-xs uppercase">
+                <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 flex items-center justify-center font-bold text-[11px] sm:text-xs uppercase">
                   {userProfile?.displayName ? userProfile.displayName.charAt(0) : 'U'}
                 </div>
-                <span className="hidden sm:inline text-xs font-medium text-slate-700 dark:text-slate-300 max-w-[120px] truncate">
+                <span className="hidden sm:inline text-xs font-medium text-slate-700 dark:text-slate-300 max-w-[100px] truncate">
                   {userProfile?.displayName || currentUser.email?.split('@')[0]}
                 </span>
               </button>
@@ -242,18 +242,18 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCreateModal }) => {
               )}
             </div>
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               <button
                 id="nav-login-btn"
                 onClick={() => navigate('/login')}
-                className="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                className="px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer whitespace-nowrap"
               >
                 Log In
               </button>
               <button
                 id="nav-signup-btn"
                 onClick={() => navigate('/signup')}
-                className="px-4 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 shadow-sm transition-all cursor-pointer"
+                className="hidden sm:inline-flex px-3 sm:px-4 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 shadow-sm transition-all cursor-pointer whitespace-nowrap"
               >
                 Sign Up
               </button>
@@ -264,7 +264,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCreateModal }) => {
           <button
             id="mobile-menu-toggle-btn"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer active:scale-95"
+            className="md:hidden p-1.5 sm:p-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer active:scale-95 shrink-0"
             aria-label="Toggle menu"
           >
             {mobileMenuOpen ? <X className="w-5 h-5 text-slate-900 dark:text-white" /> : <Menu className="w-5 h-5" />}
