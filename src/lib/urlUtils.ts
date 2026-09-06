@@ -108,14 +108,25 @@ export function validateCustomAlias(alias: string): { valid: boolean; error?: st
   return { valid: true, cleanAlias: trimmed };
 }
 
+export const DEFAULT_BRAND_DOMAIN = 'shortee.xyz';
+
 /**
- * Builds the full short URL
+ * Builds the full short URL.
+ * If useBrandDomain is true or when on custom domain, formats with shortee.xyz.
+ * By default in browser, works seamlessly both on current origin and shortee.xyz.
  */
-export function buildShortUrl(shortCode: string): string {
+export function buildShortUrl(shortCode: string, displayOnly = false): string {
+  if (displayOnly) {
+    return `https://${DEFAULT_BRAND_DOMAIN}/${shortCode}`;
+  }
   if (typeof window !== 'undefined') {
     return `${window.location.origin}/${shortCode}`;
   }
-  return `/${shortCode}`;
+  return `https://${DEFAULT_BRAND_DOMAIN}/${shortCode}`;
+}
+
+export function getDisplayShortUrl(shortCode: string): string {
+  return `${DEFAULT_BRAND_DOMAIN}/${shortCode}`;
 }
 
 /**

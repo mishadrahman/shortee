@@ -9,6 +9,7 @@ import {
   Sparkles,
   KeyRound,
   AlertCircle,
+  Globe,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../lib/theme';
@@ -132,6 +133,36 @@ export const SettingsPage: React.FC = () => {
               </button>
             </div>
           </form>
+        </div>
+
+        {/* Custom Domain Configuration */}
+        <div className="p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+              <Globe className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              Primary Domain
+            </h2>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Active
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 mb-4">
+            Your short links are branded and hosted with your primary short domain.
+          </p>
+          <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+            <div className="flex items-center gap-2.5">
+              <span className="font-mono text-sm font-bold text-slate-900 dark:text-white">
+                shortee.xyz
+              </span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                Default
+              </span>
+            </div>
+            <span className="text-xs text-slate-400 font-mono">
+              HTTPS Enabled
+            </span>
+          </div>
         </div>
 
         {/* Theme Preferences */}

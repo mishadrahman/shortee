@@ -14,6 +14,7 @@ import { LinkAnalyticsPage } from './pages/LinkAnalyticsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { RedirectHandler } from './pages/RedirectHandler';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { LinkItem } from './types';
 
 function AppContent() {
@@ -161,12 +162,14 @@ function AppContent() {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <RouterProvider>
-          <AppContent />
-        </RouterProvider>
-      </AuthProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AuthProvider>
+          <RouterProvider>
+            <AppContent />
+          </RouterProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }

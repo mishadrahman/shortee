@@ -50,14 +50,17 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCreateModal }) => {
           <button
             id="brand-logo-btn"
             onClick={() => navigate(currentUser ? '/dashboard' : '/')}
-            className="flex items-center gap-2.5 group text-left focus:outline-none"
+            className="flex items-center gap-2.5 group text-left focus:outline-none cursor-pointer"
           >
             <div className="w-9 h-9 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center transition-transform group-hover:scale-105 shadow-sm">
               <Link2 className="w-5 h-5" />
             </div>
-            <div>
-              <span className="font-bold text-base tracking-tight text-slate-900 dark:text-white">
-                URL Shortener
+            <div className="flex items-center gap-1.5">
+              <span className="font-extrabold text-base tracking-tight text-slate-900 dark:text-white">
+                Shortee
+              </span>
+              <span className="px-1.5 py-0.5 rounded-md text-[10px] font-mono font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                .xyz
               </span>
             </div>
           </button>

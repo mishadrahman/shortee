@@ -375,7 +375,7 @@ export const CreateLinkModal: React.FC<CreateLinkModalProps> = ({
                   </label>
                   <div className="flex items-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden focus-within:ring-2 focus-within:ring-slate-900 dark:focus-within:ring-slate-400">
                     <span className="px-3 py-2 text-xs font-mono text-slate-400 border-r border-slate-200 dark:border-slate-800 select-none">
-                      /{' '}
+                      shortee.xyz/
                     </span>
                     <input
                       id="custom-alias-input"

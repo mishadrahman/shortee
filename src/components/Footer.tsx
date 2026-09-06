@@ -18,9 +18,14 @@ export const Footer: React.FC = () => {
             <Link2 className="w-4 h-4" />
           </div>
           <div>
-            <span className="font-semibold text-slate-900 dark:text-white text-sm">
-              URL Shortener
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="font-bold text-slate-900 dark:text-white text-sm">
+                Shortee
+              </span>
+              <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                shortee.xyz
+              </span>
+            </div>
             <p className="text-[11px] text-slate-500">Fast, reliable link shortening & analytics</p>
           </div>
         </div>
@@ -50,7 +55,7 @@ export const Footer: React.FC = () => {
         </div>
 
         <div className="text-center md:text-right text-[11px] text-slate-500">
-          <p>© {new Date().getFullYear()} URL Shortener. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Shortee (shortee.xyz). All rights reserved.</p>
           <p className="mt-1 flex items-center justify-center md:justify-end gap-1">
             Built with production-ready Firebase & React
           </p>
