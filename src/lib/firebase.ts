@@ -1,16 +1,18 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { initializeFirestore, getFirestore } from 'firebase/firestore';
-import firebaseConfigJson from '../../firebase-applet-config.json';
+import { defaultFirebaseConfig } from './firebaseConfig';
+
+const configSource = defaultFirebaseConfig;
 
 const firebaseConfig = {
-  apiKey: firebaseConfigJson.apiKey,
-  authDomain: firebaseConfigJson.authDomain,
-  projectId: firebaseConfigJson.projectId,
-  storageBucket: firebaseConfigJson.storageBucket,
-  messagingSenderId: firebaseConfigJson.messagingSenderId,
-  appId: firebaseConfigJson.appId,
-  measurementId: firebaseConfigJson.measurementId,
+  apiKey: configSource.apiKey,
+  authDomain: configSource.authDomain,
+  projectId: configSource.projectId,
+  storageBucket: configSource.storageBucket,
+  messagingSenderId: configSource.messagingSenderId,
+  appId: configSource.appId,
+  measurementId: configSource.measurementId || '',
 };
 
 // Initialize Firebase App safely
@@ -21,8 +23,8 @@ export const auth = getAuth(app);
 export const googleAuthProvider = new GoogleAuthProvider();
 
 // Initialize Cloud Firestore with configured database ID and long-polling connection
-const databaseId = firebaseConfigJson.firestoreDatabaseId && firebaseConfigJson.firestoreDatabaseId !== '(default)'
-  ? firebaseConfigJson.firestoreDatabaseId
+const databaseId = configSource.firestoreDatabaseId && configSource.firestoreDatabaseId !== '(default)'
+  ? configSource.firestoreDatabaseId
   : undefined;
 
 export const db = (() => {

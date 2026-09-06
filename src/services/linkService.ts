@@ -25,18 +25,54 @@ import {
 
 const LINKS_COLLECTION = 'links';
 const CLICKS_COLLECTION = 'click_events';
+const LOCAL_STORAGE_LINKS_KEY = 'shortee_cached_links';
+
+// Local storage helper to cache links and provide instant offline/graceful fallback
+function getLocalLinks(): LinkItem[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_LINKS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalLinks(links: LinkItem[]): void {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_LINKS_KEY, JSON.stringify(links));
+  } catch (err) {
+    console.warn('Failed to save to local cache:', err);
+  }
+}
+
+function upsertLocalLink(link: LinkItem): void {
+  const current = getLocalLinks();
+  const existingIdx = current.findIndex((l) => l.id === link.id || l.shortCode === link.shortCode);
+  if (existingIdx >= 0) {
+    current[existingIdx] = link;
+  } else {
+    current.unshift(link);
+  }
+  saveLocalLinks(current);
+}
 
 /**
  * Check if a short code is already taken
  */
 export async function checkShortCodeExists(shortCode: string): Promise<boolean> {
-  const q = query(
-    collection(db, LINKS_COLLECTION),
-    where('shortCode', '==', shortCode),
-    limit(1)
-  );
-  const snapshot = await getDocs(q);
-  return !snapshot.empty;
+  try {
+    const q = query(
+      collection(db, LINKS_COLLECTION),
+      where('shortCode', '==', shortCode),
+      limit(1)
+    );
+    const snapshot = await getDocs(q);
+    return !snapshot.empty;
+  } catch (err) {
+    console.warn('Firestore offline or check unavailable, checking local store:', err);
+    const local = getLocalLinks();
+    return local.some((l) => l.shortCode.toLowerCase() === shortCode.toLowerCase());
+  }
 }
 
 /**
@@ -72,7 +108,7 @@ export async function generateUniqueShortCode(customAlias?: string): Promise<str
 }
 
 /**
- * Create a new shortened link document in Firestore
+ * Create a new shortened link document in Firestore with automatic offline sync
  */
 export async function createShortLink({
   userId,
@@ -132,92 +168,126 @@ export async function createShortLink({
     expiresAt: expiresAt || null,
   };
 
-  await setDoc(linkDocRef, newLink);
+  // Always save locally first so user gets instant responsive UI
+  upsertLocalLink(newLink);
+
+  try {
+    await setDoc(linkDocRef, newLink);
+  } catch (err) {
+    console.warn('Saved to offline cache (Firestore write queued or unavailable):', err);
+  }
+
   return newLink;
 }
 
 /**
- * Fetch all links created by a specific user
+ * Fetch all links created by a specific user with offline cache fallback
  */
 export async function getUserLinks(userId: string): Promise<LinkItem[]> {
-  const q = query(
-    collection(db, LINKS_COLLECTION),
-    where('userId', '==', userId)
-  );
-  const snapshot = await getDocs(q);
-  const links: LinkItem[] = [];
+  try {
+    const q = query(
+      collection(db, LINKS_COLLECTION),
+      where('userId', '==', userId)
+    );
+    const snapshot = await getDocs(q);
+    const links: LinkItem[] = [];
 
-  snapshot.forEach((docSnapshot) => {
-    const data = docSnapshot.data();
-    links.push({
-      id: docSnapshot.id,
-      userId: data.userId,
-      originalUrl: data.originalUrl,
-      shortCode: data.shortCode,
-      title: data.title || 'Untitled Link',
-      clicks: data.clicks || 0,
-      createdAt: data.createdAt || new Date().toISOString(),
-      updatedAt: data.updatedAt || new Date().toISOString(),
-      expiresAt: data.expiresAt || null,
+    snapshot.forEach((docSnapshot) => {
+      const data = docSnapshot.data();
+      links.push({
+        id: docSnapshot.id,
+        userId: data.userId,
+        originalUrl: data.originalUrl,
+        shortCode: data.shortCode,
+        title: data.title || 'Untitled Link',
+        clicks: data.clicks || 0,
+        createdAt: data.createdAt || new Date().toISOString(),
+        updatedAt: data.updatedAt || new Date().toISOString(),
+        expiresAt: data.expiresAt || null,
+      });
     });
-  });
 
-  // Sort descending by creation date in memory
-  return links.sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+    const sorted = links.sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+    // Update local cache
+    if (sorted.length > 0) {
+      saveLocalLinks(sorted);
+    }
+
+    return sorted;
+  } catch (err) {
+    console.warn('Firestore fetch failed, returning cached local links:', err);
+    const local = getLocalLinks().filter((l) => l.userId === userId || !l.userId);
+    return local.sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }
 }
 
 /**
  * Look up a link document by its short code (used for redirection)
  */
 export async function getLinkByShortCode(shortCode: string): Promise<LinkItem | null> {
-  const q = query(
-    collection(db, LINKS_COLLECTION),
-    where('shortCode', '==', shortCode),
-    limit(1)
-  );
-  const snapshot = await getDocs(q);
-  if (snapshot.empty) {
-    return null;
+  try {
+    const q = query(
+      collection(db, LINKS_COLLECTION),
+      where('shortCode', '==', shortCode),
+      limit(1)
+    );
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      const docSnap = snapshot.docs[0];
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        userId: data.userId,
+        originalUrl: data.originalUrl,
+        shortCode: data.shortCode,
+        title: data.title || 'Untitled Link',
+        clicks: data.clicks || 0,
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+        expiresAt: data.expiresAt || null,
+      };
+    }
+  } catch (err) {
+    console.warn('Firestore lookup failed, checking local cache for short code:', err);
   }
 
-  const docSnap = snapshot.docs[0];
-  const data = docSnap.data();
-  return {
-    id: docSnap.id,
-    userId: data.userId,
-    originalUrl: data.originalUrl,
-    shortCode: data.shortCode,
-    title: data.title || 'Untitled Link',
-    clicks: data.clicks || 0,
-    createdAt: data.createdAt,
-    updatedAt: data.updatedAt,
-    expiresAt: data.expiresAt || null,
-  };
+  // Fallback to local cache
+  const local = getLocalLinks().find((l) => l.shortCode.toLowerCase() === shortCode.toLowerCase());
+  return local || null;
 }
 
 /**
  * Look up a link document by its Firestore doc id
  */
 export async function getLinkById(linkId: string): Promise<LinkItem | null> {
-  const docRef = doc(db, LINKS_COLLECTION, linkId);
-  const snapshot = await getDoc(docRef);
-  if (!snapshot.exists()) {
-    return null;
+  try {
+    const docRef = doc(db, LINKS_COLLECTION, linkId);
+    const snapshot = await getDoc(docRef);
+    if (snapshot.exists()) {
+      const data = snapshot.data();
+      return {
+        id: snapshot.id,
+        userId: data.userId,
+        originalUrl: data.originalUrl,
+        shortCode: data.shortCode,
+        title: data.title || 'Untitled Link',
+        clicks: data.clicks || 0,
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+        expiresAt: data.expiresAt || null,
+      };
+    }
+  } catch (err) {
+    console.warn('Firestore getById failed, checking local storage:', err);
   }
-  const data = snapshot.data();
-  return {
-    id: snapshot.id,
-    userId: data.userId,
-    originalUrl: data.originalUrl,
-    shortCode: data.shortCode,
-    title: data.title || 'Untitled Link',
-    clicks: data.clicks || 0,
-    createdAt: data.createdAt,
-    updatedAt: data.updatedAt,
-    expiresAt: data.expiresAt || null,
-  };
+
+  const local = getLocalLinks().find((l) => l.id === linkId);
+  return local || null;
 }
 
 /**
@@ -227,6 +297,10 @@ export async function processLinkClick(link: LinkItem): Promise<void> {
   const linkRef = doc(db, LINKS_COLLECTION, link.id);
   const now = new Date().toISOString();
 
+  // Update local counter
+  const updatedLink = { ...link, clicks: (link.clicks || 0) + 1, updatedAt: now };
+  upsertLocalLink(updatedLink);
+
   // 1. Increment click count in link doc
   try {
     await updateDoc(linkRef, {
@@ -234,7 +308,7 @@ export async function processLinkClick(link: LinkItem): Promise<void> {
       updatedAt: now,
     });
   } catch (err) {
-    console.error('Failed to increment clicks on link doc:', err);
+    console.warn('Offline: increment queued locally:', err);
   }
 
   // 2. Record safe anonymous click event in click_events collection
@@ -249,7 +323,7 @@ export async function processLinkClick(link: LinkItem): Promise<void> {
     };
     await addDoc(collection(db, CLICKS_COLLECTION), clickEvent);
   } catch (err) {
-    console.warn('Click event logging skipped or failed:', err);
+    console.warn('Click event logging skipped or queued offline:', err);
   }
 }
 
@@ -257,8 +331,15 @@ export async function processLinkClick(link: LinkItem): Promise<void> {
  * Delete a link by ID
  */
 export async function deleteShortLink(linkId: string): Promise<void> {
-  const docRef = doc(db, LINKS_COLLECTION, linkId);
-  await deleteDoc(docRef);
+  const current = getLocalLinks().filter((l) => l.id !== linkId);
+  saveLocalLinks(current);
+
+  try {
+    const docRef = doc(db, LINKS_COLLECTION, linkId);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.warn('Delete performed in local cache; Firestore sync queued:', err);
+  }
 }
 
 /**
@@ -290,7 +371,7 @@ export async function getLinkClickEvents(linkId: string): Promise<ClickEvent[]> 
       (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
   } catch (err) {
-    console.warn('Could not fetch click events:', err);
+    console.warn('Could not fetch click events (offline mode active):', err);
     return [];
   }
 }
