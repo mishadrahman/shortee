@@ -374,7 +374,7 @@ export const CreateLinkModal: React.FC<CreateLinkModalProps> = ({
                     Custom Short Alias
                   </label>
                   <div className="flex items-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden focus-within:ring-2 focus-within:ring-slate-900 dark:focus-within:ring-slate-400">
-                    <span className="px-3 py-2 text-xs font-mono text-slate-400 border-r border-slate-200 dark:border-slate-800 select-none">
+                    <span className="px-2.5 sm:px-3 py-2 text-[11px] sm:text-xs font-mono text-slate-400 border-r border-slate-200 dark:border-slate-800 select-none shrink-0">
                       shortee.xyz/
                     </span>
                     <input
@@ -386,7 +386,7 @@ export const CreateLinkModal: React.FC<CreateLinkModalProps> = ({
                         setCustomAlias(e.target.value.replace(/\s+/g, '-'));
                         if (errorMessage) setErrorMessage(null);
                       }}
-                      className="w-full px-3 py-2 text-xs font-mono text-slate-900 dark:text-slate-100 bg-transparent focus:outline-none placeholder:text-slate-400"
+                      className="w-full min-w-0 px-2.5 sm:px-3 py-2 text-xs font-mono text-slate-900 dark:text-slate-100 bg-transparent focus:outline-none placeholder:text-slate-400"
                     />
                   </div>
                   <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
