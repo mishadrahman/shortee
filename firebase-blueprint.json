@@ -1,0 +1,61 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile document stored in users collection",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email", "description": "User account email" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "createdAt": { "type": "string", "description": "ISO timestamp of account creation" }
+      },
+      "required": ["id", "email", "createdAt"]
+    },
+    "Link": {
+      "title": "Link",
+      "description": "Shortened link document storing mapping between shortCode and originalUrl",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique link document ID" },
+        "userId": { "type": "string", "description": "UID of owner user" },
+        "originalUrl": { "type": "string", "format": "uri", "description": "Destination HTTP/HTTPS URL" },
+        "shortCode": { "type": "string", "pattern": "^[a-zA-Z0-9_-]+$", "description": "Unique alphanumeric short code" },
+        "title": { "type": "string", "description": "Optional human-readable title" },
+        "clicks": { "type": "number", "description": "All-time visit count" },
+        "createdAt": { "type": "string", "description": "ISO timestamp when shortened" },
+        "updatedAt": { "type": "string", "description": "ISO timestamp of last click/modification" }
+      },
+      "required": ["id", "userId", "originalUrl", "shortCode", "clicks", "createdAt"]
+    },
+    "ClickEvent": {
+      "title": "ClickEvent",
+      "description": "Safe, non-invasive visitor click event for analytics",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Click event document ID" },
+        "linkId": { "type": "string", "description": "Referenced link document ID" },
+        "shortCode": { "type": "string", "description": "Short code of clicked link" },
+        "timestamp": { "type": "string", "description": "ISO timestamp of redirection event" },
+        "referrer": { "type": "string", "description": "HTTP document referrer domain or Direct" },
+        "deviceType": { "type": "string", "enum": ["Desktop", "Mobile", "Tablet"], "description": "Device category" },
+        "browser": { "type": "string", "description": "Client browser category" }
+      },
+      "required": ["linkId", "shortCode", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Individual user profiles and settings"
+    },
+    "/links/{linkId}": {
+      "schema": { "$ref": "#/entities/Link" },
+      "description": "Shortened links and destination records"
+    },
+    "/click_events/{eventId}": {
+      "schema": { "$ref": "#/entities/ClickEvent" },
+      "description": "Individual click events recorded upon short code redirection"
+    }
+  }
+}

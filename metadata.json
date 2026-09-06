@@ -1,0 +1,6 @@
+{
+  "name": "URL Shortener",
+  "description": "A modern, fast URL shortener with custom aliases, instant QR code generation, and click analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
