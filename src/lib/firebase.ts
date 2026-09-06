@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { initializeFirestore, getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { initializeFirestore, getFirestore } from 'firebase/firestore';
 import firebaseConfigJson from '../../firebase-applet-config.json';
 
 const firebaseConfig = {
@@ -13,14 +13,14 @@ const firebaseConfig = {
   measurementId: firebaseConfigJson.measurementId,
 };
 
-// Initialize Firebase App
+// Initialize Firebase App safely
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
 // Initialize Firebase Auth
 export const auth = getAuth(app);
 export const googleAuthProvider = new GoogleAuthProvider();
 
-// Initialize Cloud Firestore with configured database ID and robust connection settings
+// Initialize Cloud Firestore with configured database ID and long-polling connection
 const databaseId = firebaseConfigJson.firestoreDatabaseId && firebaseConfigJson.firestoreDatabaseId !== '(default)'
   ? firebaseConfigJson.firestoreDatabaseId
   : undefined;
@@ -35,6 +35,11 @@ export const db = (() => {
       databaseId
     );
   } catch {
-    return databaseId ? getFirestore(app, databaseId) : getFirestore(app);
+    try {
+      return databaseId ? getFirestore(app, databaseId) : getFirestore(app);
+    } catch (fallbackErr) {
+      console.warn('Firestore fallback initialization:', fallbackErr);
+      return getFirestore(app);
+    }
   }
 })();

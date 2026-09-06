@@ -2,5 +2,7 @@
   "name": "Shortee - URL Shortener",
   "description": "Shortee (shortee.xyz) is a fast, modern URL shortener with custom aliases, link expiration, instant QR code generation, and click analytics.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
