@@ -14,10 +14,23 @@ import {
   AlertCircle,
   Filter,
   RefreshCw,
+  Download,
+  Pause,
+  Play,
+  Users,
+  Tag,
+  MousePointerClick,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useAppRouter } from '../lib/router';
-import { getUserLinks, deleteShortLink, getLocalLinks, subscribeToUserLinks } from '../services/linkService';
+import {
+  getUserLinks,
+  deleteShortLink,
+  getLocalLinks,
+  subscribeToUserLinks,
+  toggleLinkStatus,
+  exportAllLinksCsv,
+} from '../services/linkService';
 import { LinkItem } from '../types';
 import { buildShortUrl } from '../lib/urlUtils';
 
@@ -49,8 +62,11 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'mostClicks' | 'leastClicks'>('newest');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paused'>('all');
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const fetchLinks = async (showRefreshState = true) => {
     if (!currentUser) return;
@@ -121,17 +137,53 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
     }
   };
 
+  const handleToggleStatus = async (link: LinkItem) => {
+    if (togglingId) return;
+    setTogglingId(link.id);
+    const current = link.isActive !== false;
+    const ok = await toggleLinkStatus(link.id, current);
+    if (ok) {
+      setLinks((prev) =>
+        prev.map((l) => (l.id === link.id ? { ...l, isActive: !current } : l))
+      );
+    }
+    setTogglingId(null);
+  };
+
+  // Collect all unique tags across links for quick filter chips
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    links.forEach((l) => {
+      l.tags?.forEach((t) => set.add(t));
+    });
+    return Array.from(set);
+  }, [links]);
+
   // Filter and sort links
   const filteredLinks = useMemo(() => {
     let result = [...links];
 
+    // Status filter
+    if (statusFilter === 'active') {
+      result = result.filter((l) => l.isActive !== false);
+    } else if (statusFilter === 'paused') {
+      result = result.filter((l) => l.isActive === false);
+    }
+
+    // Tag filter
+    if (selectedTag) {
+      result = result.filter((l) => l.tags?.includes(selectedTag));
+    }
+
+    // Search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter(
         (l) =>
           l.title?.toLowerCase().includes(q) ||
           l.shortCode.toLowerCase().includes(q) ||
-          l.originalUrl.toLowerCase().includes(q)
+          l.originalUrl.toLowerCase().includes(q) ||
+          l.tags?.some((t) => t.toLowerCase().includes(q))
       );
     }
 
@@ -152,7 +204,7 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
     });
 
     return result;
-  }, [links, searchQuery, sortBy]);
+  }, [links, searchQuery, sortBy, statusFilter, selectedTag]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -179,6 +231,16 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
           </button>
 
           <button
+            onClick={() => exportAllLinksCsv(filteredLinks)}
+            disabled={filteredLinks.length === 0}
+            title="Export links to CSV"
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold text-xs transition-all shadow-xs cursor-pointer disabled:opacity-40"
+          >
+            <Download className="w-3.5 h-3.5 text-slate-500" />
+            <span className="hidden sm:inline">Export CSV</span>
+          </button>
+
+          <button
             id="links-create-btn"
             onClick={onOpenCreateModal}
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 font-semibold text-xs transition-all shadow-sm active:scale-95 cursor-pointer"
@@ -189,40 +251,100 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="mt-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        {/* Search */}
-        <div className="relative flex-1 max-w-md">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-            <Search className="w-4 h-4" />
+      {/* Filter, Status, and Search Bar */}
+      <div className="mt-6 space-y-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          {/* Search */}
+          <div className="relative flex-1 max-w-md">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <Search className="w-4 h-4" />
+            </div>
+            <input
+              id="links-search-input"
+              type="text"
+              placeholder="Search by title, short code, URL, or #tag..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 placeholder:text-slate-400"
+            />
           </div>
-          <input
-            id="links-search-input"
-            type="text"
-            placeholder="Search by title, short code, or URL..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 placeholder:text-slate-400"
-          />
+
+          {/* Status filter & Sort dropdown */}
+          <div className="flex items-center gap-3">
+            {/* Status pills */}
+            <div className="flex items-center p-0.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100/70 dark:bg-slate-800">
+              {(
+                [
+                  { key: 'all', label: 'All' },
+                  { key: 'active', label: 'Active' },
+                  { key: 'paused', label: 'Paused' },
+                ] as const
+              ).map((s) => (
+                <button
+                  key={s.key}
+                  onClick={() => setStatusFilter(s.key)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                    statusFilter === s.key
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-semibold'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Sort dropdown */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-slate-500 font-medium whitespace-nowrap hidden sm:inline">
+                Sort:
+              </span>
+              <select
+                id="links-sort-select"
+                value={sortBy}
+                onChange={(e: any) => setSortBy(e.target.value)}
+                className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 cursor-pointer"
+              >
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="mostClicks">Most Clicks</option>
+                <option value="leastClicks">Least Clicks</option>
+              </select>
+            </div>
+          </div>
         </div>
 
-        {/* Sort dropdown */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500 font-medium whitespace-nowrap flex items-center gap-1">
-            <ArrowUpDown className="w-3.5 h-3.5" /> Sort:
-          </span>
-          <select
-            id="links-sort-select"
-            value={sortBy}
-            onChange={(e: any) => setSortBy(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
-          >
-            <option value="newest">Newest First</option>
-            <option value="oldest">Oldest First</option>
-            <option value="mostClicks">Most Clicks</option>
-            <option value="leastClicks">Least Clicks</option>
-          </select>
-        </div>
+        {/* Tag Filter Chips (if any exist) */}
+        {allTags.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            <span className="text-xs text-slate-400 font-medium flex items-center gap-1 mr-1">
+              <Tag className="w-3 h-3" /> Tags:
+            </span>
+            <button
+              onClick={() => setSelectedTag(null)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                selectedTag === null
+                  ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-semibold'
+                  : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+              }`}
+            >
+              All Tags
+            </button>
+            {allTags.map((tag) => (
+              <button
+                key={tag}
+                onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                  selectedTag === tag
+                    ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-semibold'
+                    : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                }`}
+              >
+                #{tag}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Error state */}
@@ -305,14 +427,42 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
                 >
                   {/* Link Details (Col 5) */}
                   <div className="md:col-span-5 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-sm text-slate-900 dark:text-white truncate">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-semibold text-sm text-slate-900 dark:text-white truncate max-w-xs sm:max-w-sm">
                         {link.title || link.shortCode}
                       </h3>
+
+                      {link.isActive === false ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300">
+                          Paused
+                        </span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400">
+                          Active
+                        </span>
+                      )}
+
+                      {link.tags && link.tags.length > 0 && (
+                        <div className="flex items-center gap-1">
+                          {link.tags.slice(0, 2).map((t) => (
+                            <span
+                              key={t}
+                              className="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-medium"
+                            >
+                              #{t}
+                            </span>
+                          ))}
+                          {link.tags.length > 2 && (
+                            <span className="text-[10px] text-slate-400">+{link.tags.length - 2}</span>
+                          )}
+                        </div>
+                      )}
                     </div>
+
                     <div className="text-xs text-slate-400 dark:text-slate-500 truncate mt-0.5" title={link.originalUrl}>
                       {link.originalUrl}
                     </div>
+
                     <div className="mt-1 text-[11px] text-slate-400 flex flex-wrap items-center gap-2">
                       <div className="flex items-center gap-1">
                         <Clock className="w-3 h-3" />
@@ -344,21 +494,42 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
                     </span>
                   </div>
 
-                  {/* Clicks (Col 2) */}
-                  <div className="md:col-span-2 md:text-center flex items-center md:justify-center gap-1 text-xs">
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-full font-mono text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                  {/* Clicks & Uniques (Col 2) */}
+                  <div className="md:col-span-2 md:text-center flex flex-col md:items-center justify-center gap-1 text-xs">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-mono text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                      <MousePointerClick className="w-3 h-3 text-slate-400" />
                       {link.clicks} {link.clicks === 1 ? 'click' : 'clicks'}
                     </span>
+                    {(link.uniqueVisitors ?? 0) > 0 && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-mono text-indigo-600 dark:text-indigo-400">
+                        <Users className="w-3 h-3" />
+                        {link.uniqueVisitors} unique
+                      </span>
+                    )}
                   </div>
 
                   {/* Actions (Col 2) */}
                   <div className="md:col-span-2 flex items-center md:justify-end gap-1.5 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 dark:border-slate-800">
+                    {/* Pause / Resume Button */}
+                    <button
+                      onClick={() => handleToggleStatus(link)}
+                      disabled={togglingId === link.id}
+                      title={link.isActive === false ? 'Resume link redirection' : 'Pause link redirection'}
+                      className={`p-2 rounded-lg border transition-colors cursor-pointer ${
+                        link.isActive === false
+                          ? 'border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400'
+                          : 'border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      {link.isActive === false ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
+                    </button>
+
                     {/* Copy button */}
                     <button
                       id={`copy-btn-${link.id}`}
                       onClick={() => handleCopy(link)}
                       title="Copy short link"
-                      className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
+                      className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
                     >
                       {isCopied ? (
                         <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
@@ -383,7 +554,7 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
                       id={`qr-btn-${link.id}`}
                       onClick={() => onOpenQrModal(link)}
                       title="View & Download QR Code"
-                      className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
+                      className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
                     >
                       <QrCode className="w-3.5 h-3.5" />
                     </button>
@@ -393,7 +564,7 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
                       id={`analytics-btn-${link.id}`}
                       onClick={() => navigate(`/dashboard/analytics/${link.id}`)}
                       title="View Link Analytics"
-                      className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
+                      className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
                     >
                       <BarChart2 className="w-3.5 h-3.5" />
                     </button>
@@ -404,7 +575,7 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
                       onClick={() => handleDelete(link.id)}
                       disabled={isDeleting}
                       title="Delete link"
-                      className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors disabled:opacity-50"
+                      className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors disabled:opacity-50 cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>

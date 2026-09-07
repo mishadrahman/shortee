@@ -170,6 +170,21 @@ export function getSafeBrowserName(): string {
 }
 
 /**
+ * Safely parse Operating System from User Agent
+ */
+export function getSafeOS(): string {
+  if (typeof window === 'undefined') return 'Unknown OS';
+  const ua = navigator.userAgent;
+  if (/windows nt 10/i.test(ua)) return 'Windows 10/11';
+  if (/windows/i.test(ua)) return 'Windows';
+  if (/macintosh|mac os x/i.test(ua)) return 'macOS';
+  if (/iphone|ipad|ipod/i.test(ua)) return 'iOS';
+  if (/android/i.test(ua)) return 'Android';
+  if (/linux/i.test(ua)) return 'Linux';
+  return 'Other OS';
+}
+
+/**
  * Clean human-readable referrer
  */
 export function getSafeReferrer(): string {
@@ -182,12 +197,89 @@ export function getSafeReferrer(): string {
     if (host.includes('google.')) return 'Google Search';
     if (host.includes('twitter.com') || host.includes('x.com')) return 'X / Twitter';
     if (host.includes('linkedin.com')) return 'LinkedIn';
-    if (host.includes('facebook.com')) return 'Facebook';
+    if (host.includes('facebook.com') || host.includes('fb.me')) return 'Facebook';
     if (host.includes('reddit.com')) return 'Reddit';
     if (host.includes('youtube.com')) return 'YouTube';
     if (host.includes('github.com')) return 'GitHub';
+    if (host.includes('instagram.com')) return 'Instagram';
+    if (host.includes('whatsapp.com')) return 'WhatsApp';
     return host;
   } catch {
     return 'Direct / Other';
+  }
+}
+
+/**
+ * Get or create an anonymous visitor identifier stored locally.
+ * Respects privacy: random UUID-like string, not tied to personal identity.
+ */
+export function getOrCreateVisitorId(): string {
+  if (typeof window === 'undefined') return 'server-visitor';
+  try {
+    const key = 'shortee_anon_vid';
+    let vid = localStorage.getItem(key);
+    if (!vid) {
+      vid = 'v_' + Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
+      localStorage.setItem(key, vid);
+    }
+    return vid;
+  } catch {
+    return 'anon_' + Math.random().toString(36).substring(2, 10);
+  }
+}
+
+/**
+ * Checks if this visitor has clicked this specific short link within the last 24 hours.
+ * Returns true if this is a Unique Visit (first time or >24h elapsed).
+ * Returns false if repeat click within 24 hours (cooldown).
+ */
+export function checkAndRecordUniqueVisit(linkId: string): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    const storageKey = `shortee_last_visit_${linkId}`;
+    const lastVisitStr = localStorage.getItem(storageKey);
+    const now = Date.now();
+    const COOLDOWN_24H = 24 * 60 * 60 * 1000;
+
+    if (lastVisitStr) {
+      const lastVisitTime = parseInt(lastVisitStr, 10);
+      if (!isNaN(lastVisitTime) && now - lastVisitTime < COOLDOWN_24H) {
+        // Repeat visit within 24h window
+        return false;
+      }
+    }
+
+    // First time or cooldown expired
+    localStorage.setItem(storageKey, now.toString());
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Builds a URL with UTM Campaign Parameters
+ */
+export function buildUtmUrl(
+  baseUrl: string,
+  params: {
+    source?: string;
+    medium?: string;
+    campaign?: string;
+    term?: string;
+    content?: string;
+  }
+): string {
+  if (!baseUrl.trim()) return baseUrl;
+  try {
+    const parsed = new URL(baseUrl.startsWith('http') ? baseUrl : `https://${baseUrl}`);
+    if (params.source?.trim()) parsed.searchParams.set('utm_source', params.source.trim());
+    if (params.medium?.trim()) parsed.searchParams.set('utm_medium', params.medium.trim());
+    if (params.campaign?.trim()) parsed.searchParams.set('utm_campaign', params.campaign.trim());
+    if (params.term?.trim()) parsed.searchParams.set('utm_term', params.term.trim());
+    if (params.content?.trim()) parsed.searchParams.set('utm_content', params.content.trim());
+    return parsed.href;
+  } catch {
+    return baseUrl;
   }
 }

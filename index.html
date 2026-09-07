@@ -36,6 +36,56 @@
         }
       })();
     </script>
+
+    <!-- Instant Pre-Redirector for cached links (Bitly-style 0ms fast path) -->
+    <script>
+      (function () {
+        try {
+          var pathname = window.location.pathname || '/';
+          var cleanPath = pathname.replace(/^\/+|\/+$/g, '');
+          var reservedRoutes = [
+            'shortee',
+            'dashboard',
+            'login',
+            'signup',
+            'forgot-password',
+            'auth',
+            'settings',
+            'analytics',
+            'links',
+            'api',
+            '404',
+            'terms',
+            'privacy',
+            'about',
+            'pricing',
+            'profile',
+            'admin',
+          ];
+
+          // Check if single short code segment and not a reserved route
+          if (cleanPath && cleanPath.indexOf('/') === -1 && reservedRoutes.indexOf(cleanPath.toLowerCase()) === -1) {
+            var raw = localStorage.getItem('shortee_links_cache') || localStorage.getItem('shortee_local_links');
+            if (raw) {
+              var links = JSON.parse(raw);
+              if (Array.isArray(links)) {
+                var match = links.find(function (l) {
+                  return l && l.shortCode && l.shortCode.toLowerCase() === cleanPath.toLowerCase();
+                });
+                if (match && match.originalUrl && match.isActive !== false) {
+                  var isExpired = match.expiresAt && new Date(match.expiresAt).getTime() <= Date.now();
+                  if (!isExpired) {
+                    match.clicks = (match.clicks || 0) + 1;
+                    localStorage.setItem('shortee_links_cache', JSON.stringify(links));
+                    window.location.replace(match.originalUrl);
+                  }
+                }
+              }
+            }
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

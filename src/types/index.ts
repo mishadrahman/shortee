@@ -5,6 +5,9 @@ export interface LinkItem {
   shortCode: string;
   title: string;
   clicks: number;
+  uniqueVisitors?: number; // Deduplicated visitor count
+  tags?: string[]; // Marketing tags e.g. 'Social', 'Campaign'
+  isActive?: boolean;
   createdAt: string; // ISO 8601 string
   updatedAt: string; // ISO 8601 string
   expiresAt?: string | null; // ISO 8601 string or null if never expires
@@ -20,6 +23,17 @@ export interface ClickEvent {
   referrer: string;
   deviceType: 'Desktop' | 'Mobile' | 'Tablet';
   browser: string;
+  operatingSystem?: string;
+  isUnique?: boolean;
+  visitorId?: string;
+}
+
+export interface UtmParams {
+  source?: string;
+  medium?: string;
+  campaign?: string;
+  term?: string;
+  content?: string;
 }
 
 export interface UserProfile {

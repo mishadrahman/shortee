@@ -23,10 +23,10 @@ service cloud.firestore {
       // Link owner can delete
       allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
 
-      // Owner can update, or public visitor can atomically increment clicks count and update updatedAt
+      // Owner can update, or public visitor can atomically increment clicks/uniqueVisitors count and update updatedAt
       allow update: if (request.auth != null && resource.data.userId == request.auth.uid)
                     || (
-                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clicks', 'updatedAt'])
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clicks', 'uniqueVisitors', 'updatedAt'])
                       && request.resource.data.clicks is number
                     );
     }

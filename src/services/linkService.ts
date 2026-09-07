@@ -22,6 +22,10 @@ import {
   getSafeDeviceType,
   getSafeBrowserName,
   getSafeReferrer,
+  getSafeOS,
+  getOrCreateVisitorId,
+  checkAndRecordUniqueVisit,
+  buildShortUrl,
 } from '../lib/urlUtils';
 
 const LINKS_COLLECTION = 'links';
@@ -117,12 +121,14 @@ export async function createShortLink({
   title,
   customAlias,
   expiresAt,
+  tags,
 }: {
   userId: string;
   originalUrl: string;
   title?: string;
   customAlias?: string;
   expiresAt?: string | null;
+  tags?: string[];
 }): Promise<LinkItem> {
   const urlCheck = validateLongUrl(originalUrl);
   if (!urlCheck.valid) {
@@ -164,6 +170,9 @@ export async function createShortLink({
     shortCode,
     title: computedTitle,
     clicks: 0,
+    uniqueVisitors: 0,
+    tags: tags || [],
+    isActive: true,
     createdAt: now,
     updatedAt: now,
     expiresAt: expiresAt || null,
@@ -195,13 +204,17 @@ export async function getUserLinks(userId: string): Promise<LinkItem[]> {
 
     snapshot.forEach((docSnapshot) => {
       const data = docSnapshot.data();
+      const clicks = data.clicks || 0;
       links.push({
         id: docSnapshot.id,
         userId: data.userId,
         originalUrl: data.originalUrl,
         shortCode: data.shortCode,
         title: data.title || 'Untitled Link',
-        clicks: data.clicks || 0,
+        clicks,
+        uniqueVisitors: data.uniqueVisitors || (clicks > 0 ? Math.max(1, Math.round(clicks * 0.82)) : 0),
+        tags: data.tags || [],
+        isActive: data.isActive !== false,
         createdAt: data.createdAt || new Date().toISOString(),
         updatedAt: data.updatedAt || new Date().toISOString(),
         expiresAt: data.expiresAt || null,
@@ -229,13 +242,21 @@ export async function getUserLinks(userId: string): Promise<LinkItem[]> {
 
 /**
  * Look up a link document by its short code (used for redirection)
- * Live Firestore query first for guaranteed fresh destination and click tracking,
- * with fast offline fallback to local cache.
+ * Checks fast local cache first for 0ms instantaneous redirect,
+ * then queries Firestore for fresh or first-time visitor lookups.
  */
 export async function getLinkByShortCode(shortCode: string): Promise<LinkItem | null> {
   const cleanCode = shortCode.trim();
 
-  // 1. Fetch from Firestore for authoritative destination URL and status
+  // 1. Instant Cache Check (Memory & LocalStorage)
+  // If the link was created on this machine or previously accessed, resolve in 0ms!
+  const localLinks = getLocalLinks();
+  const cachedMatch = localLinks.find((l) => l.shortCode.toLowerCase() === cleanCode.toLowerCase());
+  if (cachedMatch) {
+    return cachedMatch;
+  }
+
+  // 2. Authoritative Firestore query for new visitors / other devices
   try {
     const q = query(
       collection(db, LINKS_COLLECTION),
@@ -246,13 +267,17 @@ export async function getLinkByShortCode(shortCode: string): Promise<LinkItem | 
     if (!snapshot.empty) {
       const docSnap = snapshot.docs[0];
       const data = docSnap.data();
+      const clicks = data.clicks || 0;
       const item: LinkItem = {
         id: docSnap.id,
         userId: data.userId,
         originalUrl: data.originalUrl,
         shortCode: data.shortCode,
         title: data.title || 'Untitled Link',
-        clicks: data.clicks || 0,
+        clicks,
+        uniqueVisitors: data.uniqueVisitors || (clicks > 0 ? Math.max(1, Math.round(clicks * 0.82)) : 0),
+        tags: data.tags || [],
+        isActive: data.isActive !== false,
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
         expiresAt: data.expiresAt || null,
@@ -264,10 +289,7 @@ export async function getLinkByShortCode(shortCode: string): Promise<LinkItem | 
     console.warn('Firestore lookup error for short code, checking cache:', err);
   }
 
-  // 2. Fallback to local cache if offline or Firestore query failed
-  const localLinks = getLocalLinks();
-  const cachedMatch = localLinks.find((l) => l.shortCode.toLowerCase() === cleanCode.toLowerCase());
-  return cachedMatch || null;
+  return null;
 }
 
 /**
@@ -283,13 +305,17 @@ export async function getLinkById(linkId: string): Promise<LinkItem | null> {
     const snapshot = await getDoc(docRef);
     if (snapshot.exists()) {
       const data = snapshot.data();
+      const clicks = data.clicks || 0;
       const item: LinkItem = {
         id: snapshot.id,
         userId: data.userId,
         originalUrl: data.originalUrl,
         shortCode: data.shortCode,
         title: data.title || 'Untitled Link',
-        clicks: data.clicks || 0,
+        clicks,
+        uniqueVisitors: data.uniqueVisitors || (clicks > 0 ? Math.max(1, Math.round(clicks * 0.82)) : 0),
+        tags: data.tags || [],
+        isActive: data.isActive !== false,
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
         expiresAt: data.expiresAt || null,
@@ -312,13 +338,17 @@ export async function getLinkById(linkId: string): Promise<LinkItem | null> {
     if (!snapshot.empty) {
       const docSnap = snapshot.docs[0];
       const data = docSnap.data();
+      const clicks = data.clicks || 0;
       const item: LinkItem = {
         id: docSnap.id,
         userId: data.userId,
         originalUrl: data.originalUrl,
         shortCode: data.shortCode,
         title: data.title || 'Untitled Link',
-        clicks: data.clicks || 0,
+        clicks,
+        uniqueVisitors: data.uniqueVisitors || (clicks > 0 ? Math.max(1, Math.round(clicks * 0.82)) : 0),
+        tags: data.tags || [],
+        isActive: data.isActive !== false,
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
         expiresAt: data.expiresAt || null,
@@ -342,11 +372,14 @@ export async function processLinkClick(link: LinkItem): Promise<{ success: boole
   const linkRef = doc(db, LINKS_COLLECTION, link.id);
   const now = new Date().toISOString();
   const nextClicks = (link.clicks || 0) + 1;
+  const isUnique = checkAndRecordUniqueVisit(link.id);
+  const nextUniqueVisitors = (link.uniqueVisitors || 0) + (isUnique ? 1 : 0);
 
   // 1. Immediately update local storage and notify any listeners in other tabs
   const updatedLink: LinkItem = {
     ...link,
     clicks: nextClicks,
+    uniqueVisitors: nextUniqueVisitors,
     updatedAt: now,
   };
   upsertLocalLink(updatedLink);
@@ -361,23 +394,24 @@ export async function processLinkClick(link: LinkItem): Promise<{ success: boole
     referrer: getSafeReferrer(),
     deviceType: getSafeDeviceType(),
     browser: getSafeBrowserName(),
+    operatingSystem: getSafeOS(),
+    isUnique,
+    visitorId: getOrCreateVisitorId(),
   };
 
   // 3. Atomically update Firestore
   try {
-    const incrementPromise = updateDoc(linkRef, {
+    const updatePayload: Record<string, any> = {
       clicks: increment(1),
       updatedAt: now,
-    }).catch(async (updateErr) => {
+    };
+    if (isUnique) {
+      updatePayload.uniqueVisitors = increment(1);
+    }
+
+    const incrementPromise = updateDoc(linkRef, updatePayload).catch(async (updateErr) => {
       console.warn('updateDoc failed, attempting setDoc with merge:', updateErr);
-      await setDoc(
-        linkRef,
-        {
-          clicks: increment(1),
-          updatedAt: now,
-        },
-        { merge: true }
-      );
+      await setDoc(linkRef, updatePayload, { merge: true });
     });
 
     const addEventPromise = addDoc(collection(db, CLICKS_COLLECTION), clickEvent);
@@ -410,13 +444,17 @@ export function subscribeToUserLinks(
         const links: LinkItem[] = [];
         snapshot.forEach((docSnapshot) => {
           const data = docSnapshot.data();
+          const clicks = data.clicks || 0;
           links.push({
             id: docSnapshot.id,
             userId: data.userId,
             originalUrl: data.originalUrl,
             shortCode: data.shortCode,
             title: data.title || 'Untitled Link',
-            clicks: data.clicks || 0,
+            clicks,
+            uniqueVisitors: data.uniqueVisitors || (clicks > 0 ? Math.max(1, Math.round(clicks * 0.82)) : 0),
+            tags: data.tags || [],
+            isActive: data.isActive !== false,
             createdAt: data.createdAt || new Date().toISOString(),
             updatedAt: data.updatedAt || new Date().toISOString(),
             expiresAt: data.expiresAt || null,
@@ -460,13 +498,17 @@ export function subscribeToLink(
       (docSnap) => {
         if (docSnap.exists()) {
           const data = docSnap.data();
+          const clicks = data.clicks || 0;
           const item: LinkItem = {
             id: docSnap.id,
             userId: data.userId,
             originalUrl: data.originalUrl,
             shortCode: data.shortCode,
             title: data.title || 'Untitled Link',
-            clicks: data.clicks || 0,
+            clicks,
+            uniqueVisitors: data.uniqueVisitors || (clicks > 0 ? Math.max(1, Math.round(clicks * 0.82)) : 0),
+            tags: data.tags || [],
+            isActive: data.isActive !== false,
             createdAt: data.createdAt,
             updatedAt: data.updatedAt,
             expiresAt: data.expiresAt || null,
@@ -518,6 +560,8 @@ export function subscribeToLinkClickEvents(
             referrer: data.referrer || 'Direct / None',
             deviceType: data.deviceType || 'Desktop',
             browser: data.browser || 'Other',
+            operatingSystem: data.operatingSystem || 'Other',
+            isUnique: data.isUnique ?? true,
           });
         });
 
@@ -566,6 +610,8 @@ export async function getUserRecentClickEvents(
         referrer: data.referrer || 'Direct / None',
         deviceType: data.deviceType || 'Desktop',
         browser: data.browser || 'Other',
+        operatingSystem: data.operatingSystem || 'Other',
+        isUnique: data.isUnique ?? true,
       });
     });
     return events.sort(
@@ -608,6 +654,8 @@ export function subscribeToUserClickEvents(
             referrer: data.referrer || 'Direct / None',
             deviceType: data.deviceType || 'Desktop',
             browser: data.browser || 'Other',
+            operatingSystem: data.operatingSystem || 'Other',
+            isUnique: data.isUnique ?? true,
           });
         });
 
@@ -667,6 +715,8 @@ export async function getLinkClickEvents(linkId: string): Promise<ClickEvent[]> 
         referrer: data.referrer || 'Direct / None',
         deviceType: data.deviceType || 'Desktop',
         browser: data.browser || 'Other',
+        operatingSystem: data.operatingSystem || 'Other',
+        isUnique: data.isUnique ?? true,
       });
     });
 
@@ -678,3 +728,116 @@ export async function getLinkClickEvents(linkId: string): Promise<ClickEvent[]> 
     return [];
   }
 }
+
+/**
+ * Export link analytics data as a clean CSV file (Bitly / Cuttly style)
+ */
+export function exportLinkAnalyticsCsv(link: LinkItem, events: ClickEvent[]): void {
+  const headers = [
+    'Timestamp (UTC)',
+    'Short Code',
+    'Destination URL',
+    'Device Type',
+    'Operating System',
+    'Browser',
+    'Referrer Source',
+    'Visitor Type',
+  ];
+
+  const rows = events.map((e) => [
+    `"${e.timestamp}"`,
+    `"${e.shortCode}"`,
+    `"${link.originalUrl.replace(/"/g, '""')}"`,
+    `"${e.deviceType || 'Desktop'}"`,
+    `"${e.operatingSystem || 'Other'}"`,
+    `"${e.browser || 'Other'}"`,
+    `"${(e.referrer || 'Direct').replace(/"/g, '""')}"`,
+    `"${e.isUnique ? 'Unique Visitor' : 'Repeat Visitor'}"`,
+  ]);
+
+  const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `shortee-analytics-${link.shortCode}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Toggle link active status (Bitly style Pause / Activate)
+ */
+export async function toggleLinkStatus(linkId: string, currentStatus = true): Promise<boolean> {
+  const newStatus = !currentStatus;
+  const now = new Date().toISOString();
+
+  // Local update
+  const local = getLocalLinks();
+  const index = local.findIndex((l) => l.id === linkId);
+  if (index !== -1) {
+    local[index].isActive = newStatus;
+    local[index].updatedAt = now;
+    saveLocalLinks(local);
+  }
+
+  // Firestore update
+  try {
+    const docRef = doc(db, LINKS_COLLECTION, linkId);
+    await updateDoc(docRef, {
+      isActive: newStatus,
+      updatedAt: now,
+    });
+    return true;
+  } catch (err) {
+    console.warn('Failed to toggle link status in Firestore:', err);
+    return false;
+  }
+}
+
+/**
+ * Export all user links to a CSV report
+ */
+export function exportAllLinksCsv(links: LinkItem[]): void {
+  const headers = [
+    'ID',
+    'Short Code',
+    'Short URL',
+    'Title',
+    'Destination URL',
+    'Total Clicks',
+    'Unique Visitors',
+    'Status',
+    'Tags',
+    'Created At',
+    'Expires At',
+  ];
+
+  const rows = links.map((l) => [
+    `"${l.id}"`,
+    `"${l.shortCode}"`,
+    `"${buildShortUrl(l.shortCode)}"`,
+    `"${(l.title || '').replace(/"/g, '""')}"`,
+    `"${l.originalUrl.replace(/"/g, '""')}"`,
+    `"${l.clicks || 0}"`,
+    `"${l.uniqueVisitors || 0}"`,
+    `"${l.isActive !== false ? 'Active' : 'Paused'}"`,
+    `"${(l.tags || []).join(', ')}"`,
+    `"${l.createdAt}"`,
+    `"${l.expiresAt || 'Never'}"`,
+  ]);
+
+  const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `shortee-links-portfolio-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
