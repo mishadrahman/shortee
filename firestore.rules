@@ -27,7 +27,6 @@ service cloud.firestore {
       allow update: if (request.auth != null && resource.data.userId == request.auth.uid)
                     || (
                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clicks', 'uniqueVisitors', 'updatedAt'])
-                      && request.resource.data.clicks is number
                     );
     }
 

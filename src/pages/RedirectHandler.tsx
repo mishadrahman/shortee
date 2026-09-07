@@ -53,19 +53,22 @@ export const RedirectHandler: React.FC<RedirectHandlerProps> = ({ shortCode }) =
 
         setTargetLink(link);
 
-        // 1. Kick off click & analytics processing in the background (fire-and-forget, non-blocking)
-        processLinkClick(link).catch((clickErr) => {
-          console.warn('Click tracking error:', clickErr);
-        });
+        // 1. Process click tracking and ENSURE Firestore receives and confirms it before redirecting!
+        // We race processLinkClick against a 600ms safety timeout so the visitor is never blocked.
+        try {
+          await Promise.race([
+            processLinkClick(link),
+            new Promise((resolve) => setTimeout(resolve, 600)),
+          ]);
+        } catch (clickErr) {
+          console.warn('Click tracking warning:', clickErr);
+        }
 
         if (isCancelled) return;
 
-        // 2. Instant Bitly-style redirection: Zero artificial delay!
-        // A micro-tick (25ms) allows the browser event loop to flush the tracking socket frame
+        // 2. Direct browser to original URL
         if (link.originalUrl) {
-          setTimeout(() => {
-            window.location.replace(link.originalUrl);
-          }, 25);
+          window.location.replace(link.originalUrl);
         }
       } catch (err: any) {
         console.error('Redirect processing error:', err);

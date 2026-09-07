@@ -98,19 +98,26 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
       (err) => console.warn('Realtime links sync warning:', err)
     );
 
-    // Listen for tab focus / visibilitychange
+    // Listen for tab focus / visibilitychange and cross-tab storage pings
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
         fetchLinks(false);
       }
     };
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'shortee_last_click_ping' || e.key === 'shortee_cached_links') {
+        fetchLinks(false);
+      }
+    };
     window.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('focus', handleVisibility);
+    window.addEventListener('storage', handleStorage);
 
     return () => {
       unsubscribe();
       window.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('focus', handleVisibility);
+      window.removeEventListener('storage', handleStorage);
     };
   }, [currentUser]);
 

@@ -384,17 +384,22 @@ export async function processLinkClick(link: LinkItem): Promise<{ success: boole
   };
   upsertLocalLink(updatedLink);
 
+  // Cross-tab broadcast for instant multi-tab UI refresh
+  try {
+    localStorage.setItem('shortee_last_click_ping', `${link.id}_${nextClicks}_${Date.now()}`);
+  } catch {}
+
   // 2. Prepare ClickEvent document
-  const clickEvent: Omit<ClickEvent, 'id'> = {
+  const clickEvent: Record<string, any> = {
     linkId: link.id,
-    userId: link.userId,
-    linkTitle: link.title || link.shortCode,
+    userId: link.userId || '',
+    linkTitle: link.title || link.shortCode || 'Short Link',
     shortCode: link.shortCode,
     timestamp: now,
-    referrer: getSafeReferrer(),
-    deviceType: getSafeDeviceType(),
-    browser: getSafeBrowserName(),
-    operatingSystem: getSafeOS(),
+    referrer: getSafeReferrer() || 'Direct / None',
+    deviceType: getSafeDeviceType() || 'Desktop',
+    browser: getSafeBrowserName() || 'Other',
+    operatingSystem: getSafeOS() || 'Other OS',
     isUnique,
     visitorId: getOrCreateVisitorId(),
   };
@@ -414,7 +419,9 @@ export async function processLinkClick(link: LinkItem): Promise<{ success: boole
       await setDoc(linkRef, updatePayload, { merge: true });
     });
 
-    const addEventPromise = addDoc(collection(db, CLICKS_COLLECTION), clickEvent);
+    const addEventPromise = addDoc(collection(db, CLICKS_COLLECTION), clickEvent).catch((evtErr) => {
+      console.warn('addDoc click_events error:', evtErr);
+    });
 
     await Promise.allSettled([incrementPromise, addEventPromise]);
     return { success: true, newClicks: nextClicks };
