@@ -49,12 +49,16 @@ function parseCurrentRoute(): RouteInfo {
   const search = window.location.search || '';
   const params: Record<string, string> = {};
 
-  // If redirect query param from 404.html was passed e.g. ?p=/dashboard/analytics/xyz
-  if (search && search.startsWith('?p=')) {
-    const searchParams = new URLSearchParams(search);
-    const p = searchParams.get('p');
-    if (p) {
-      rawPathname = p;
+  // If redirect query param from 404.html was passed e.g. ?p=/dashboard/links
+  if (search && search.includes('p=')) {
+    try {
+      const searchParams = new URLSearchParams(search);
+      const p = searchParams.get('p');
+      if (p) {
+        rawPathname = p;
+      }
+    } catch {
+      // ignore parse error
     }
   }
 
@@ -79,19 +83,28 @@ function parseCurrentRoute(): RouteInfo {
   let isShortCodeRoute = false;
   let shortCode: string | undefined = undefined;
 
-  // Single segment path check for shortcode e.g. /xyz123
+  // Single segment path check for shortcode e.g. /xyz123 (ensuring not reserved)
   if (segments.length === 1) {
-    const first = segments[0];
-    if (!RESERVED_ROUTES.has(first.toLowerCase())) {
+    const first = segments[0].toLowerCase();
+    const RESERVED_SET = new Set([
+      'dashboard',
+      'login',
+      'signup',
+      'forgot-password',
+      'settings',
+      'links',
+      'analytics',
+    ]);
+    if (!RESERVED_SET.has(first)) {
       isShortCodeRoute = true;
-      shortCode = first;
+      shortCode = segments[0];
     }
   }
 
-  // Check for dashboard analytics route: /dashboard/analytics/:id or /dashboard/links/:id/analytics
-  if (segments.length >= 3 && segments[0] === 'dashboard' && segments[1] === 'analytics') {
+  // Check for dashboard sub-routes: /dashboard/analytics/:id, /dashboard/links, /dashboard/settings, etc.
+  if (segments.length >= 3 && segments[0].toLowerCase() === 'dashboard' && segments[1].toLowerCase() === 'analytics') {
     params.id = segments[2];
-  } else if (segments.length >= 3 && segments[0] === 'dashboard' && segments[1] === 'links') {
+  } else if (segments.length >= 3 && segments[0].toLowerCase() === 'dashboard' && segments[1].toLowerCase() === 'links') {
     params.id = segments[2];
   }
 
