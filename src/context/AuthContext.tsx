@@ -71,7 +71,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (isMounted) {
         setLoading(false);
       }
-    }, 1500);
+    }, 300);
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!isMounted) return;
