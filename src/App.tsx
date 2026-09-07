@@ -32,17 +32,6 @@ function AppContent() {
   // Handle protected dashboard routes
   const isDashboardRoute = route.pathname.startsWith('/dashboard');
 
-  if (isDashboardRoute && authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 text-slate-500">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-slate-900 dark:border-white border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-xs font-medium">Loading session...</p>
-        </div>
-      </div>
-    );
-  }
-
   // Render Page Content based on persistent URL route
   const renderPage = () => {
     // 1. Public Auth routes
@@ -56,8 +45,29 @@ function AppContent() {
       return <AuthPages mode="forgot-password" />;
     }
 
-    // 2. Protected Dashboard routes (require currentUser)
+    // 2. Protected Dashboard routes
     if (isDashboardRoute) {
+      // While auth session is restoring from IndexedDB on refresh, show a smooth dashboard skeleton
+      if (authLoading) {
+        return (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+            <div className="animate-pulse space-y-6">
+              <div className="flex flex-col gap-2 pb-6 border-b border-slate-200 dark:border-slate-800">
+                <div className="h-7 w-40 bg-slate-200 dark:bg-slate-800 rounded-xl" />
+                <div className="h-4 w-72 bg-slate-100 dark:bg-slate-800/60 rounded-lg" />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                <div className="h-28 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60 rounded-2xl p-5" />
+                <div className="h-28 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60 rounded-2xl p-5" />
+                <div className="h-28 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60 rounded-2xl p-5" />
+              </div>
+              <div className="h-72 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60 rounded-2xl" />
+            </div>
+          </div>
+        );
+      }
+
+      // Only show Authentication Required if auth verification has completed and user is genuinely null
       if (!currentUser) {
         return (
           <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4">

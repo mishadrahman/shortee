@@ -38,7 +38,12 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     }
     return [];
   });
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return getLocalLinks().length === 0;
+    }
+    return true;
+  });
   const [error, setError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -46,6 +51,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const fetchLinks = async () => {
     if (!currentUser) return;
     try {
+      setLoading(true);
       const data = await getUserLinks(currentUser.uid);
       setLinks(data);
     } catch (err: any) {

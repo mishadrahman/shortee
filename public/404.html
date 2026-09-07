@@ -15,22 +15,27 @@
         pathSegmentsToKeep = 1;
       }
 
+      var basePath = l.pathname
+        .split('/')
+        .slice(0, 1 + pathSegmentsToKeep)
+        .join('/')
+        .replace(/\/+$/, '');
+
+      var targetPath = l.pathname
+        .slice(1)
+        .split('/')
+        .slice(pathSegmentsToKeep)
+        .join('/')
+        .replace(/&/g, '~and~');
+
       var redirectUrl =
         l.protocol +
         '//' +
         l.hostname +
         (l.port ? ':' + l.port : '') +
-        l.pathname
-          .split('/')
-          .slice(0, 1 + pathSegmentsToKeep)
-          .join('/') +
+        (basePath ? basePath : '') +
         '/?p=/' +
-        l.pathname
-          .slice(1)
-          .split('/')
-          .slice(pathSegmentsToKeep)
-          .join('/')
-          .replace(/&/g, '~and~') +
+        targetPath +
         (l.search ? '&q=' + l.search.slice(1).replace(/&/g, '~and~') : '') +
         l.hash;
 

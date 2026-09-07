@@ -38,7 +38,12 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
     }
     return [];
   });
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return getLocalLinks().length === 0;
+    }
+    return true;
+  });
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'mostClicks' | 'leastClicks'>('newest');
@@ -48,6 +53,7 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
   const fetchLinks = async () => {
     if (!currentUser) return;
     try {
+      setLoading(true);
       const data = await getUserLinks(currentUser.uid);
       setLinks(data);
     } catch (err: any) {

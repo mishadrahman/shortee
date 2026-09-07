@@ -21,7 +21,7 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ onOpenCreateModal }) => {
-  const { currentUser, userProfile, logout } = useAuth();
+  const { currentUser, userProfile, loading, logout } = useAuth();
   const { route, navigate } = useAppRouter();
   const { isDark, toggleTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -66,7 +66,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCreateModal }) => {
           </button>
 
           {/* Desktop Nav - Dashboard view vs Public view */}
-          {currentUser && isDashboard && (
+          {(currentUser || (loading && isDashboard)) && isDashboard && (
             <nav className="hidden md:flex items-center gap-1">
               <button
                 id="nav-overview-btn"
@@ -162,7 +162,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCreateModal }) => {
           </button>
 
           {/* User Profile or Sign in buttons */}
-          {currentUser ? (
+          {loading ? (
+            <div className="w-8 h-8 sm:w-24 sm:h-8 rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse border border-slate-200/50 dark:border-slate-800/50" />
+          ) : currentUser ? (
             <div className="relative shrink-0">
               <button
                 id="user-profile-menu-btn"

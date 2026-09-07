@@ -77,9 +77,8 @@ function parseCurrentRoute(): RouteInfo {
     normalizedPath = normalizedPath.slice(basePath.length) || '/';
   }
 
-  if (!normalizedPath.startsWith('/')) {
-    normalizedPath = '/' + normalizedPath;
-  }
+  // Ensure clean single leading slash and normalize multiple leading slashes
+  normalizedPath = '/' + normalizedPath.replace(/^\/+/, '');
 
   // Remove trailing slash except for root '/'
   if (normalizedPath.length > 1 && normalizedPath.endsWith('/')) {

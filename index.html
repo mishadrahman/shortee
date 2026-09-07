@@ -20,12 +20,19 @@
         }
 
         var search = window.location.search;
-        if (search && search.startsWith('?p=')) {
-          var params = new URLSearchParams(search);
-          var path = params.get('p') || '/';
-          var query = params.get('q');
-          var target = path + (query ? '?' + query.replace(/~and~/g, '&') : '') + window.location.hash;
-          window.history.replaceState(null, null, target);
+        if (search) {
+          try {
+            var params = new URLSearchParams(search);
+            if (params.has('p')) {
+              var path = params.get('p') || '/';
+              path = '/' + path.replace(/^\/+/, '');
+              var query = params.get('q');
+              var target = path + (query ? '?' + query.replace(/~and~/g, '&') : '') + window.location.hash;
+              window.history.replaceState(null, null, target);
+            }
+          } catch (e) {
+            console.warn('SPA route restore error:', e);
+          }
         }
       })();
     </script>

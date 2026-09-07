@@ -36,6 +36,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  // Initialize loading state: if Firebase auth already has currentUser, loading is false. Otherwise true until onAuthStateChanged fires.
   const [loading, setLoading] = useState<boolean>(() => {
     try {
       return !auth.currentUser;
@@ -78,20 +79,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let isMounted = true;
 
-    // Safety fallback timer to prevent infinite loading screen on reload
-    const timer = setTimeout(() => {
+    // Safety fallback timer (5 seconds) to prevent infinite loading in extreme offline/hang scenarios
+    const fallbackTimer = setTimeout(() => {
       if (isMounted) {
         setLoading(false);
       }
-    }, 300);
+    }, 5000);
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!isMounted) return;
-      clearTimeout(timer);
+      clearTimeout(fallbackTimer);
       setCurrentUser(user);
       if (user) {
+        try {
+          localStorage.setItem('shortee_auth_active', '1');
+        } catch {}
         syncUserProfile(user).catch(console.warn);
       } else {
+        try {
+          localStorage.removeItem('shortee_auth_active');
+        } catch {}
         setUserProfile(null);
       }
       setLoading(false);
@@ -99,7 +106,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return () => {
       isMounted = false;
-      clearTimeout(timer);
+      clearTimeout(fallbackTimer);
       unsubscribe();
     };
   }, []);
@@ -135,6 +142,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
+    try {
+      localStorage.removeItem('shortee_auth_active');
+    } catch {}
     await signOut(auth);
     setCurrentUser(null);
     setUserProfile(null);
