@@ -28,9 +28,21 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    try {
+      return auth.currentUser || null;
+    } catch {
+      return null;
+    }
+  });
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(() => {
+    try {
+      return !auth.currentUser;
+    } catch {
+      return true;
+    }
+  });
 
   // Sync user profile from Firestore or create on first sign-in
   const syncUserProfile = async (user: User | null) => {
