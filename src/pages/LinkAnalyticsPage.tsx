@@ -14,9 +14,16 @@ import {
   Clock,
   AlertCircle,
   BarChart2,
+  RefreshCw,
 } from 'lucide-react';
 import { useAppRouter } from '../lib/router';
-import { getLinkById, getLinkClickEvents, getLocalLinks } from '../services/linkService';
+import {
+  getLinkById,
+  getLinkClickEvents,
+  getLocalLinks,
+  subscribeToLink,
+  subscribeToLinkClickEvents,
+} from '../services/linkService';
 import { LinkItem, ClickEvent } from '../types';
 import { buildShortUrl } from '../lib/urlUtils';
 
@@ -44,30 +51,65 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
     }
     return true;
   });
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    async function loadData() {
-      if (!linkId) return;
-      try {
-        const linkData = await getLinkById(linkId);
-        if (!linkData) {
-          setError('Shortened link not found or you do not have permission to view it.');
-          return;
-        }
-        setLink(linkData);
-
-        const events = await getLinkClickEvents(linkData.id);
-        setClickEvents(events);
-      } catch (err: any) {
-        console.error('Error fetching analytics:', err);
-        setError('Failed to load link analytics. Please try again.');
-      } finally {
-        setLoading(false);
+  const loadData = async (showLoadingState = false) => {
+    if (!linkId) return;
+    try {
+      if (showLoadingState) setRefreshing(true);
+      const linkData = await getLinkById(linkId);
+      if (!linkData) {
+        setError('Shortened link not found or you do not have permission to view it.');
+        return;
       }
+      setLink(linkData);
+
+      const events = await getLinkClickEvents(linkData.id);
+      setClickEvents(events);
+    } catch (err: any) {
+      console.error('Error fetching analytics:', err);
+      setError('Failed to load link analytics. Please try again.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-    loadData();
+  };
+
+  useEffect(() => {
+    loadData(false);
+
+    let unsubLink = () => {};
+    let unsubEvents = () => {};
+
+    // Subscribe once we have or discover the link
+    getLinkById(linkId).then((resolvedLink) => {
+      if (resolvedLink) {
+        setLink(resolvedLink);
+        unsubLink = subscribeToLink(resolvedLink.id, (fresh) => {
+          if (fresh) setLink(fresh);
+        });
+        unsubEvents = subscribeToLinkClickEvents(resolvedLink.id, (freshEvents) => {
+          setClickEvents(freshEvents);
+        });
+      }
+    });
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadData(false);
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleVisibility);
+
+    return () => {
+      unsubLink();
+      unsubEvents();
+      window.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleVisibility);
+    };
   }, [linkId]);
 
   const handleCopy = async () => {
@@ -180,6 +222,16 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
 
           {/* Actions */}
           <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              onClick={() => loadData(true)}
+              disabled={refreshing}
+              title="Refresh stats"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-slate-900 dark:text-white' : ''}`} />
+              <span>Refresh</span>
+            </button>
+
             <button
               onClick={handleCopy}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 transition-colors"

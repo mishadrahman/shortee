@@ -35,6 +35,8 @@
       "properties": {
         "id": { "type": "string", "description": "Click event document ID" },
         "linkId": { "type": "string", "description": "Referenced link document ID" },
+        "userId": { "type": "string", "description": "UID of owner user" },
+        "linkTitle": { "type": "string", "description": "Title of clicked link" },
         "shortCode": { "type": "string", "description": "Short code of clicked link" },
         "timestamp": { "type": "string", "description": "ISO timestamp of redirection event" },
         "referrer": { "type": "string", "description": "HTTP document referrer domain or Direct" },

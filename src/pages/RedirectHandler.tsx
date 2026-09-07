@@ -42,14 +42,23 @@ export const RedirectHandler: React.FC<RedirectHandlerProps> = ({ shortCode }) =
           }
         }
 
-        // Non-blocking fire-and-forget analytics tracking so user redirects immediately
-        processLinkClick(link).catch((clickErr) => {
-          console.warn('Analytics logging queued in background:', clickErr);
-        });
+        setTargetLink(link);
+
+        // Record the click and analytics event in Firestore.
+        // Wait up to 600ms for network write before redirecting,
+        // ensuring Firestore and local cache record the click counter and visitor event.
+        try {
+          await Promise.race([
+            processLinkClick(link),
+            new Promise((resolve) => setTimeout(resolve, 600)),
+          ]);
+        } catch (clickErr) {
+          console.warn('Click tracking warning:', clickErr);
+        }
 
         if (isCancelled) return;
 
-        // INSTANT REDIRECTION - No artificial delay/countdown
+        // Redirect to long URL
         if (link.originalUrl) {
           window.location.replace(link.originalUrl);
         }

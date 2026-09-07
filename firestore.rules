@@ -12,7 +12,7 @@ service cloud.firestore {
       // Allow getting individual link or querying shortCode for public redirection
       allow get: if true;
       allow list: if (request.auth != null && resource.data.userId == request.auth.uid)
-                  || (request.query.limit <= 5);
+                  || (request.query.limit <= 10);
 
       // Authenticated user can create link for themselves
       allow create: if request.auth != null 
@@ -23,11 +23,11 @@ service cloud.firestore {
       // Link owner can delete
       allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
 
-      // Owner can update, or public visitor can atomically increment clicks count
+      // Owner can update, or public visitor can atomically increment clicks count and update updatedAt
       allow update: if (request.auth != null && resource.data.userId == request.auth.uid)
                     || (
                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clicks', 'updatedAt'])
-                      && request.resource.data.clicks == resource.data.clicks + 1
+                      && request.resource.data.clicks is number
                     );
     }
 

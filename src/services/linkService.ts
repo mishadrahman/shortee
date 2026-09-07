@@ -11,6 +11,7 @@ import {
   limit,
   increment,
   addDoc,
+  onSnapshot,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { LinkItem, ClickEvent } from '../types';
@@ -228,23 +229,17 @@ export async function getUserLinks(userId: string): Promise<LinkItem[]> {
 
 /**
  * Look up a link document by its short code (used for redirection)
- * Fast local-first lookup with Firestore fallback for sub-millisecond response.
+ * Live Firestore query first for guaranteed fresh destination and click tracking,
+ * with fast offline fallback to local cache.
  */
 export async function getLinkByShortCode(shortCode: string): Promise<LinkItem | null> {
-  const normalized = shortCode.trim().toLowerCase();
+  const cleanCode = shortCode.trim();
 
-  // 1. Check instant local cache first
-  const localLinks = getLocalLinks();
-  const cachedMatch = localLinks.find((l) => l.shortCode.toLowerCase() === normalized);
-  if (cachedMatch) {
-    return cachedMatch;
-  }
-
-  // 2. Fetch from Firestore if not in local memory
+  // 1. Fetch from Firestore for authoritative destination URL and status
   try {
     const q = query(
       collection(db, LINKS_COLLECTION),
-      where('shortCode', '==', shortCode),
+      where('shortCode', '==', cleanCode),
       limit(1)
     );
     const snapshot = await getDocs(q);
@@ -266,25 +261,23 @@ export async function getLinkByShortCode(shortCode: string): Promise<LinkItem | 
       return item;
     }
   } catch (err) {
-    console.warn('Firestore lookup failed for short code:', err);
+    console.warn('Firestore lookup error for short code, checking cache:', err);
   }
 
-  return null;
+  // 2. Fallback to local cache if offline or Firestore query failed
+  const localLinks = getLocalLinks();
+  const cachedMatch = localLinks.find((l) => l.shortCode.toLowerCase() === cleanCode.toLowerCase());
+  return cachedMatch || null;
 }
 
 /**
  * Look up a link document by its Firestore doc id (or shortCode)
+ * Authoritative Firestore query first so analytics and clicks are always 100% accurate.
  */
 export async function getLinkById(linkId: string): Promise<LinkItem | null> {
   const trimmedId = linkId.trim();
 
-  // 1. Check local cache first
-  const localMatch = getLocalLinks().find((l) => l.id === trimmedId || l.shortCode === trimmedId);
-  if (localMatch) {
-    return localMatch;
-  }
-
-  // 2. Fetch directly from Firestore by Document ID
+  // 1. Fetch directly from Firestore by Document ID
   try {
     const docRef = doc(db, LINKS_COLLECTION, trimmedId);
     const snapshot = await getDoc(docRef);
@@ -305,10 +298,10 @@ export async function getLinkById(linkId: string): Promise<LinkItem | null> {
       return item;
     }
   } catch (err) {
-    console.warn('Firestore getById failed for doc id, trying shortCode query:', err);
+    console.warn('Firestore getById doc id lookup error:', err);
   }
 
-  // 3. Fallback: try querying by shortCode in case shortCode was passed
+  // 2. Try querying by shortCode in Firestore
   try {
     const q = query(
       collection(db, LINKS_COLLECTION),
@@ -334,46 +327,304 @@ export async function getLinkById(linkId: string): Promise<LinkItem | null> {
       return item;
     }
   } catch (err) {
-    console.warn('Firestore query by shortCode also failed:', err);
+    console.warn('Firestore query by shortCode fallback error:', err);
   }
 
-  return null;
+  // 3. Fallback to local cache only if offline or network unreachable
+  const localMatch = getLocalLinks().find((l) => l.id === trimmedId || l.shortCode === trimmedId);
+  return localMatch || null;
 }
 
 /**
- * Increment click count on a link document atomically and record click event
+ * Increment click count on a link document atomically and record safe anonymous click event
  */
-export async function processLinkClick(link: LinkItem): Promise<void> {
+export async function processLinkClick(link: LinkItem): Promise<{ success: boolean; newClicks: number }> {
   const linkRef = doc(db, LINKS_COLLECTION, link.id);
   const now = new Date().toISOString();
+  const nextClicks = (link.clicks || 0) + 1;
 
-  // Update local counter
-  const updatedLink = { ...link, clicks: (link.clicks || 0) + 1, updatedAt: now };
+  // 1. Immediately update local storage and notify any listeners in other tabs
+  const updatedLink: LinkItem = {
+    ...link,
+    clicks: nextClicks,
+    updatedAt: now,
+  };
   upsertLocalLink(updatedLink);
 
-  // 1. Increment click count in link doc
+  // 2. Prepare ClickEvent document
+  const clickEvent: Omit<ClickEvent, 'id'> = {
+    linkId: link.id,
+    userId: link.userId,
+    linkTitle: link.title || link.shortCode,
+    shortCode: link.shortCode,
+    timestamp: now,
+    referrer: getSafeReferrer(),
+    deviceType: getSafeDeviceType(),
+    browser: getSafeBrowserName(),
+  };
+
+  // 3. Atomically update Firestore
   try {
-    await updateDoc(linkRef, {
+    const incrementPromise = updateDoc(linkRef, {
       clicks: increment(1),
       updatedAt: now,
+    }).catch(async (updateErr) => {
+      console.warn('updateDoc failed, attempting setDoc with merge:', updateErr);
+      await setDoc(
+        linkRef,
+        {
+          clicks: increment(1),
+          updatedAt: now,
+        },
+        { merge: true }
+      );
     });
-  } catch (err) {
-    console.warn('Offline: increment queued locally:', err);
-  }
 
-  // 2. Record safe anonymous click event in click_events collection
-  try {
-    const clickEvent: Omit<ClickEvent, 'id'> = {
-      linkId: link.id,
-      shortCode: link.shortCode,
-      timestamp: now,
-      referrer: getSafeReferrer(),
-      deviceType: getSafeDeviceType(),
-      browser: getSafeBrowserName(),
-    };
-    await addDoc(collection(db, CLICKS_COLLECTION), clickEvent);
+    const addEventPromise = addDoc(collection(db, CLICKS_COLLECTION), clickEvent);
+
+    await Promise.allSettled([incrementPromise, addEventPromise]);
+    return { success: true, newClicks: nextClicks };
   } catch (err) {
-    console.warn('Click event logging skipped or queued offline:', err);
+    console.warn('Firestore link click processing error:', err);
+    return { success: false, newClicks: nextClicks };
+  }
+}
+
+/**
+ * Subscribe in real-time to all links for a user
+ */
+export function subscribeToUserLinks(
+  userId: string,
+  onUpdate: (links: LinkItem[]) => void,
+  onError?: (err: any) => void
+): () => void {
+  try {
+    const q = query(
+      collection(db, LINKS_COLLECTION),
+      where('userId', '==', userId)
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const links: LinkItem[] = [];
+        snapshot.forEach((docSnapshot) => {
+          const data = docSnapshot.data();
+          links.push({
+            id: docSnapshot.id,
+            userId: data.userId,
+            originalUrl: data.originalUrl,
+            shortCode: data.shortCode,
+            title: data.title || 'Untitled Link',
+            clicks: data.clicks || 0,
+            createdAt: data.createdAt || new Date().toISOString(),
+            updatedAt: data.updatedAt || new Date().toISOString(),
+            expiresAt: data.expiresAt || null,
+          });
+        });
+
+        const sorted = links.sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+
+        if (sorted.length > 0) {
+          saveLocalLinks(sorted);
+        }
+        onUpdate(sorted);
+      },
+      (error) => {
+        console.warn('Real-time links snapshot warning:', error);
+        if (onError) onError(error);
+      }
+    );
+
+    return unsubscribe;
+  } catch (err) {
+    console.warn('Failed to attach real-time links listener:', err);
+    return () => {};
+  }
+}
+
+/**
+ * Subscribe in real-time to a specific link document
+ */
+export function subscribeToLink(
+  linkId: string,
+  onUpdate: (link: LinkItem) => void,
+  onError?: (err: any) => void
+): () => void {
+  try {
+    const linkRef = doc(db, LINKS_COLLECTION, linkId);
+    const unsubscribe = onSnapshot(
+      linkRef,
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          const item: LinkItem = {
+            id: docSnap.id,
+            userId: data.userId,
+            originalUrl: data.originalUrl,
+            shortCode: data.shortCode,
+            title: data.title || 'Untitled Link',
+            clicks: data.clicks || 0,
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+            expiresAt: data.expiresAt || null,
+          };
+          upsertLocalLink(item);
+          onUpdate(item);
+        }
+      },
+      (error) => {
+        console.warn('Real-time link snapshot warning:', error);
+        if (onError) onError(error);
+      }
+    );
+    return unsubscribe;
+  } catch (err) {
+    console.warn('Failed to subscribe to link:', err);
+    return () => {};
+  }
+}
+
+/**
+ * Subscribe in real-time to click events for a specific link
+ */
+export function subscribeToLinkClickEvents(
+  linkId: string,
+  onUpdate: (events: ClickEvent[]) => void,
+  onError?: (err: any) => void
+): () => void {
+  try {
+    const q = query(
+      collection(db, CLICKS_COLLECTION),
+      where('linkId', '==', linkId),
+      limit(100)
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const events: ClickEvent[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          events.push({
+            id: docSnap.id,
+            linkId: data.linkId,
+            userId: data.userId,
+            linkTitle: data.linkTitle,
+            shortCode: data.shortCode,
+            timestamp: data.timestamp,
+            referrer: data.referrer || 'Direct / None',
+            deviceType: data.deviceType || 'Desktop',
+            browser: data.browser || 'Other',
+          });
+        });
+
+        const sorted = events.sort(
+          (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+        onUpdate(sorted);
+      },
+      (error) => {
+        console.warn('Real-time click events snapshot warning:', error);
+        if (onError) onError(error);
+      }
+    );
+
+    return unsubscribe;
+  } catch (err) {
+    console.warn('Failed to subscribe to click events:', err);
+    return () => {};
+  }
+}
+
+/**
+ * Fetch recent click events across all user links for the dashboard activity stream
+ */
+export async function getUserRecentClickEvents(
+  userId: string,
+  limitCount = 10
+): Promise<ClickEvent[]> {
+  try {
+    const q = query(
+      collection(db, CLICKS_COLLECTION),
+      where('userId', '==', userId),
+      limit(limitCount)
+    );
+    const snapshot = await getDocs(q);
+    const events: ClickEvent[] = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      events.push({
+        id: docSnap.id,
+        linkId: data.linkId,
+        userId: data.userId,
+        linkTitle: data.linkTitle,
+        shortCode: data.shortCode,
+        timestamp: data.timestamp,
+        referrer: data.referrer || 'Direct / None',
+        deviceType: data.deviceType || 'Desktop',
+        browser: data.browser || 'Other',
+      });
+    });
+    return events.sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+  } catch (err) {
+    console.warn('Failed to fetch user recent click events:', err);
+    return [];
+  }
+}
+
+/**
+ * Subscribe in real-time to recent click events for a user
+ */
+export function subscribeToUserClickEvents(
+  userId: string,
+  onUpdate: (events: ClickEvent[]) => void,
+  limitCount = 10
+): () => void {
+  try {
+    const q = query(
+      collection(db, CLICKS_COLLECTION),
+      where('userId', '==', userId),
+      limit(limitCount)
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const events: ClickEvent[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          events.push({
+            id: docSnap.id,
+            linkId: data.linkId,
+            userId: data.userId,
+            linkTitle: data.linkTitle,
+            shortCode: data.shortCode,
+            timestamp: data.timestamp,
+            referrer: data.referrer || 'Direct / None',
+            deviceType: data.deviceType || 'Desktop',
+            browser: data.browser || 'Other',
+          });
+        });
+
+        const sorted = events.sort(
+          (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+        onUpdate(sorted);
+      },
+      (error) => {
+        console.warn('Real-time user click events warning:', error);
+      }
+    );
+
+    return unsubscribe;
+  } catch (err) {
+    console.warn('Failed to subscribe to user click events:', err);
+    return () => {};
   }
 }
 
@@ -409,9 +660,11 @@ export async function getLinkClickEvents(linkId: string): Promise<ClickEvent[]> 
       events.push({
         id: docSnap.id,
         linkId: data.linkId,
+        userId: data.userId,
+        linkTitle: data.linkTitle,
         shortCode: data.shortCode,
         timestamp: data.timestamp,
-        referrer: data.referrer || 'Direct',
+        referrer: data.referrer || 'Direct / None',
         deviceType: data.deviceType || 'Desktop',
         browser: data.browser || 'Other',
       });

@@ -13,6 +13,8 @@ export interface LinkItem {
 export interface ClickEvent {
   id?: string;
   linkId: string;
+  userId?: string;
+  linkTitle?: string;
   shortCode: string;
   timestamp: string;
   referrer: string;

@@ -13,10 +13,11 @@ import {
   Clock,
   AlertCircle,
   Filter,
+  RefreshCw,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useAppRouter } from '../lib/router';
-import { getUserLinks, deleteShortLink, getLocalLinks } from '../services/linkService';
+import { getUserLinks, deleteShortLink, getLocalLinks, subscribeToUserLinks } from '../services/linkService';
 import { LinkItem } from '../types';
 import { buildShortUrl } from '../lib/urlUtils';
 
@@ -44,16 +45,17 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
     }
     return true;
   });
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'mostClicks' | 'leastClicks'>('newest');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const fetchLinks = async () => {
+  const fetchLinks = async (showRefreshState = true) => {
     if (!currentUser) return;
     try {
-      setLoading(true);
+      if (showRefreshState) setRefreshing(true);
       const data = await getUserLinks(currentUser.uid);
       setLinks(data);
     } catch (err: any) {
@@ -61,13 +63,39 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
       setError('Could not load links from Firestore. Please try again.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
-    if (currentUser) {
-      fetchLinks();
-    }
+    if (!currentUser) return;
+
+    fetchLinks(false);
+
+    // Real-time Firestore sync
+    const unsubscribe = subscribeToUserLinks(
+      currentUser.uid,
+      (freshLinks) => {
+        setLinks(freshLinks);
+        setLoading(false);
+      },
+      (err) => console.warn('Realtime links sync warning:', err)
+    );
+
+    // Listen for tab focus / visibilitychange
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        fetchLinks(false);
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleVisibility);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleVisibility);
+    };
   }, [currentUser]);
 
   const handleCopy = async (link: LinkItem) => {
@@ -139,14 +167,26 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
           </p>
         </div>
 
-        <button
-          id="links-create-btn"
-          onClick={onOpenCreateModal}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 font-semibold text-xs transition-all shadow-sm active:scale-95 self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Shorten URL</span>
-        </button>
+        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+          <button
+            onClick={() => fetchLinks(true)}
+            disabled={refreshing}
+            title="Refresh links"
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold text-xs transition-all shadow-xs cursor-pointer"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-slate-900 dark:text-white' : ''}`} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+
+          <button
+            id="links-create-btn"
+            onClick={onOpenCreateModal}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 font-semibold text-xs transition-all shadow-sm active:scale-95 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Shorten URL</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
@@ -192,7 +232,7 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
             <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
             <span>{error}</span>
           </div>
-          <button onClick={fetchLinks} className="font-semibold underline">
+          <button onClick={() => fetchLinks(true)} className="font-semibold underline cursor-pointer">
             Retry
           </button>
         </div>
