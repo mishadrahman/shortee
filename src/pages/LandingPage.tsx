@@ -18,6 +18,7 @@ import {
   Trash2,
   Globe,
   UserPlus,
+  Lock,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useAppRouter } from '../lib/router';
@@ -410,6 +411,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenQr }) => {
                     <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
                       Destination: {createdResult.originalUrl}
                     </p>
+                    {!currentUser && (
+                      <p className="text-[11px] text-amber-700 dark:text-amber-500/90 mt-1.5 flex items-center gap-1 font-medium cursor-pointer" onClick={() => navigate('/signup')}>
+                        <Lock className="w-3 h-3" />
+                        Basic tracking enabled. Sign up to unlock full click analytics.
+                      </p>
+                    )}
                     {createdResult.expiresAt && (
                       <p className="text-xs text-amber-700 dark:text-amber-400 flex items-center gap-1 mt-1 font-medium">
                         <Clock className="w-3 h-3 shrink-0" />
@@ -496,8 +503,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenQr }) => {
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                             {link.clicks || 0} {link.clicks === 1 ? 'click' : 'clicks'}
                           </span>
+                          <button
+                            type="button"
+                            onClick={() => navigate('/signup')}
+                            className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors cursor-pointer"
+                            title="Full tracking recorded. Sign up to view analytics."
+                          >
+                            <Lock className="w-2.5 h-2.5" />
+                            Analytics Locked
+                          </button>
                         </div>
-                        <p className="text-xs text-slate-500 truncate mt-0.5 max-w-md">
+                        <p className="text-xs text-slate-500 truncate mt-1 max-w-md">
                           {link.originalUrl}
                         </p>
                       </div>
