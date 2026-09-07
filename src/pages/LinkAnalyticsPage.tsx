@@ -16,7 +16,7 @@ import {
   BarChart2,
 } from 'lucide-react';
 import { useAppRouter } from '../lib/router';
-import { getLinkById, getLinkClickEvents } from '../services/linkService';
+import { getLinkById, getLinkClickEvents, getLocalLinks } from '../services/linkService';
 import { LinkItem, ClickEvent } from '../types';
 import { buildShortUrl } from '../lib/urlUtils';
 
@@ -30,17 +30,26 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
   onOpenQrModal,
 }) => {
   const { navigate } = useAppRouter();
-  const [link, setLink] = useState<LinkItem | null>(null);
+  const [link, setLink] = useState<LinkItem | null>(() => {
+    if (typeof window !== 'undefined') {
+      return getLocalLinks().find((l) => l.id === linkId || l.shortCode === linkId) || null;
+    }
+    return null;
+  });
   const [clickEvents, setClickEvents] = useState<ClickEvent[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const cached = getLocalLinks().find((l) => l.id === linkId || l.shortCode === linkId);
+      return !cached;
+    }
+    return true;
+  });
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     async function loadData() {
       if (!linkId) return;
-      setLoading(true);
-      setError(null);
       try {
         const linkData = await getLinkById(linkId);
         if (!linkData) {
@@ -49,7 +58,7 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
         }
         setLink(linkData);
 
-        const events = await getLinkClickEvents(linkId);
+        const events = await getLinkClickEvents(linkData.id);
         setClickEvents(events);
       } catch (err: any) {
         console.error('Error fetching analytics:', err);

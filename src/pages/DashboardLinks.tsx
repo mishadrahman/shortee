@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useAppRouter } from '../lib/router';
-import { getUserLinks, deleteShortLink } from '../services/linkService';
+import { getUserLinks, deleteShortLink, getLocalLinks } from '../services/linkService';
 import { LinkItem } from '../types';
 import { buildShortUrl } from '../lib/urlUtils';
 
@@ -32,8 +32,13 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
   const { currentUser } = useAuth();
   const { navigate } = useAppRouter();
 
-  const [links, setLinks] = useState<LinkItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [links, setLinks] = useState<LinkItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      return getLocalLinks();
+    }
+    return [];
+  });
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'mostClicks' | 'leastClicks'>('newest');
@@ -42,8 +47,6 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
 
   const fetchLinks = async () => {
     if (!currentUser) return;
-    setLoading(true);
-    setError(null);
     try {
       const data = await getUserLinks(currentUser.uid);
       setLinks(data);
@@ -56,7 +59,9 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
   };
 
   useEffect(() => {
-    fetchLinks();
+    if (currentUser) {
+      fetchLinks();
+    }
   }, [currentUser]);
 
   const handleCopy = async (link: LinkItem) => {

@@ -28,7 +28,7 @@ const CLICKS_COLLECTION = 'click_events';
 const LOCAL_STORAGE_LINKS_KEY = 'shortee_cached_links';
 
 // Local storage helper to cache links and provide instant offline/graceful fallback
-function getLocalLinks(): LinkItem[] {
+export function getLocalLinks(): LinkItem[] {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_LINKS_KEY);
     return raw ? JSON.parse(raw) : [];

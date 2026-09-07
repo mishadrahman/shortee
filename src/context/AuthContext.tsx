@@ -39,6 +39,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
+    // Set immediate basic profile so UI doesn't wait
+    const defaultProfile: UserProfile = {
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName || (user.email ? user.email.split('@')[0] : 'User'),
+      photoURL: user.photoURL,
+      createdAt: new Date().toISOString(),
+    };
+    setUserProfile(defaultProfile);
+
     try {
       const userDocRef = doc(db, 'users', user.uid);
       const snapshot = await getDoc(userDocRef);
@@ -46,37 +56,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (snapshot.exists()) {
         setUserProfile(snapshot.data() as UserProfile);
       } else {
-        const newProfile: UserProfile = {
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName || (user.email ? user.email.split('@')[0] : 'User'),
-          photoURL: user.photoURL,
-          createdAt: new Date().toISOString(),
-        };
-        await setDoc(userDocRef, newProfile);
-        setUserProfile(newProfile);
+        await setDoc(userDocRef, defaultProfile);
       }
     } catch (err) {
       console.warn('Could not sync user profile with Firestore:', err);
-      // Fallback in-memory profile
-      setUserProfile({
-        uid: user.uid,
-        email: user.email,
-        displayName: user.displayName || 'User',
-        photoURL: user.photoURL,
-        createdAt: new Date().toISOString(),
-      });
     }
   };
 
   useEffect(() => {
+    let isMounted = true;
+
+    // Safety fallback timer to prevent infinite loading screen on reload
+    const timer = setTimeout(() => {
+      if (isMounted) {
+        setLoading(false);
+      }
+    }, 1500);
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!isMounted) return;
+      clearTimeout(timer);
       setCurrentUser(user);
-      await syncUserProfile(user);
+      if (user) {
+        syncUserProfile(user).catch(console.warn);
+      } else {
+        setUserProfile(null);
+      }
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+      unsubscribe();
+    };
   }, []);
 
   const signInWithEmail = async (email: string, pass: string) => {

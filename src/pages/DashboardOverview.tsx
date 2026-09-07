@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useAppRouter } from '../lib/router';
-import { getUserLinks, deleteShortLink } from '../services/linkService';
+import { getUserLinks, deleteShortLink, getLocalLinks } from '../services/linkService';
 import { LinkItem } from '../types';
 import { buildShortUrl } from '../lib/urlUtils';
 
@@ -32,16 +32,19 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const { currentUser, userProfile } = useAuth();
   const { navigate } = useAppRouter();
 
-  const [links, setLinks] = useState<LinkItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [links, setLinks] = useState<LinkItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      return getLocalLinks();
+    }
+    return [];
+  });
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const fetchLinks = async () => {
     if (!currentUser) return;
-    setLoading(true);
-    setError(null);
     try {
       const data = await getUserLinks(currentUser.uid);
       setLinks(data);
@@ -54,7 +57,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   };
 
   useEffect(() => {
-    fetchLinks();
+    if (currentUser) {
+      fetchLinks();
+    }
   }, [currentUser]);
 
   const totalLinks = links.length;
