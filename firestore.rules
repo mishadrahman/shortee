@@ -14,17 +14,24 @@ service cloud.firestore {
       allow list: if (request.auth != null && resource.data.userId == request.auth.uid)
                   || (request.query.limit <= 10);
 
-      // Authenticated user can create link for themselves
-      allow create: if request.auth != null 
-                    && request.resource.data.userId == request.auth.uid
+      // Authenticated user can create link for themselves, or guest without account can create
+      allow create: if (
+                      (request.auth != null && request.resource.data.userId == request.auth.uid)
+                      || (request.resource.data.userId == 'guest')
+                    )
                     && request.resource.data.shortCode is string
                     && request.resource.data.originalUrl is string;
 
       // Link owner can delete
       allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
 
-      // Owner can update, or public visitor can atomically increment clicks/uniqueVisitors count and update updatedAt
+      // Owner can update, public visitor can increment clicks, or authenticated user can claim a guest link
       allow update: if (request.auth != null && resource.data.userId == request.auth.uid)
+                    || (
+                      request.auth != null 
+                      && resource.data.userId == 'guest' 
+                      && request.resource.data.userId == request.auth.uid
+                    )
                     || (
                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clicks', 'uniqueVisitors', 'updatedAt'])
                     );

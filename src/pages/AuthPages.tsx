@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useAppRouter } from '../lib/router';
-import { createShortLink } from '../services/linkService';
+import { createShortLink, claimGuestLinksToAccount } from '../services/linkService';
 
 type AuthMode = 'login' | 'signup' | 'forgot-password';
 
@@ -44,10 +44,16 @@ export const AuthPages: React.FC<AuthPagesProps> = ({ mode }) => {
     setIsEmailInUse(false);
   }, [mode]);
 
-  // If already logged in, check if pending link needs to be created, else redirect to dashboard
+  // If already logged in, check if pending link needs to be created or guest links need to be claimed, else redirect to dashboard
   useEffect(() => {
     if (currentUser) {
       const handlePendingUrl = async () => {
+        try {
+          await claimGuestLinksToAccount(currentUser.uid);
+        } catch (e) {
+          console.warn('Guest links transfer notice:', e);
+        }
+
         try {
           const pendingUrl = sessionStorage.getItem('pending_shorten_url');
           const pendingAlias = sessionStorage.getItem('pending_shorten_alias');

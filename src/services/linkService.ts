@@ -31,6 +31,7 @@ import {
 const LINKS_COLLECTION = 'links';
 const CLICKS_COLLECTION = 'click_events';
 const LOCAL_STORAGE_LINKS_KEY = 'shortee_cached_links';
+const GUEST_LINKS_KEY = 'shortee_guest_links';
 
 // Local storage helper to cache links and provide instant offline/graceful fallback
 export function getLocalLinks(): LinkItem[] {
@@ -50,6 +51,38 @@ function saveLocalLinks(links: LinkItem[]): void {
   }
 }
 
+export function getGuestLinks(): LinkItem[] {
+  try {
+    const raw = localStorage.getItem(GUEST_LINKS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveGuestLink(link: LinkItem): void {
+  try {
+    const current = getGuestLinks();
+    const filtered = current.filter((l) => l.id !== link.id && l.shortCode !== link.shortCode);
+    const updated = [link, ...filtered];
+    localStorage.setItem(GUEST_LINKS_KEY, JSON.stringify(updated));
+  } catch (err) {
+    console.warn('Failed to store guest link:', err);
+  }
+}
+
+export function deleteGuestLink(linkId: string): void {
+  try {
+    const current = getGuestLinks();
+    const updated = current.filter((l) => l.id !== linkId);
+    localStorage.setItem(GUEST_LINKS_KEY, JSON.stringify(updated));
+  } catch (err) {
+    console.warn('Failed to delete guest link:', err);
+  }
+}
+
 function upsertLocalLink(link: LinkItem): void {
   const current = getLocalLinks();
   const existingIdx = current.findIndex((l) => l.id === link.id || l.shortCode === link.shortCode);
@@ -59,6 +92,16 @@ function upsertLocalLink(link: LinkItem): void {
     current.unshift(link);
   }
   saveLocalLinks(current);
+
+  // If this is also a guest link, keep the guest list in sync
+  try {
+    const guestLinks = getGuestLinks();
+    const gIdx = guestLinks.findIndex((l) => l.id === link.id || l.shortCode === link.shortCode);
+    if (gIdx >= 0) {
+      guestLinks[gIdx] = { ...guestLinks[gIdx], ...link };
+      localStorage.setItem(GUEST_LINKS_KEY, JSON.stringify(guestLinks));
+    }
+  } catch {}
 }
 
 /**
@@ -123,7 +166,7 @@ export async function createShortLink({
   expiresAt,
   tags,
 }: {
-  userId: string;
+  userId?: string;
   originalUrl: string;
   title?: string;
   customAlias?: string;
@@ -162,10 +205,11 @@ export async function createShortLink({
 
   const linkDocRef = doc(collection(db, LINKS_COLLECTION));
   const now = new Date().toISOString();
+  const resolvedUserId = userId?.trim() || 'guest';
 
   const newLink: LinkItem = {
     id: linkDocRef.id,
-    userId,
+    userId: resolvedUserId,
     originalUrl: cleanUrl,
     shortCode,
     title: computedTitle,
@@ -181,6 +225,10 @@ export async function createShortLink({
   // Always save locally first so user gets instant responsive UI
   upsertLocalLink(newLink);
 
+  if (resolvedUserId === 'guest') {
+    saveGuestLink(newLink);
+  }
+
   try {
     await setDoc(linkDocRef, newLink);
   } catch (err) {
@@ -188,6 +236,33 @@ export async function createShortLink({
   }
 
   return newLink;
+}
+
+/**
+ * Transfer all guest links created on this browser to a logged-in user account
+ */
+export async function claimGuestLinksToAccount(userId: string): Promise<number> {
+  if (!userId || userId === 'guest') return 0;
+  const guestLinks = getGuestLinks();
+  if (guestLinks.length === 0) return 0;
+
+  let claimedCount = 0;
+  for (const link of guestLinks) {
+    try {
+      const linkRef = doc(db, LINKS_COLLECTION, link.id);
+      await updateDoc(linkRef, { userId });
+      claimedCount++;
+    } catch (err) {
+      console.warn('Failed to transfer guest link to account:', link.id, err);
+    }
+  }
+
+  // Clear guest links once transferred
+  try {
+    localStorage.removeItem(GUEST_LINKS_KEY);
+  } catch {}
+
+  return claimedCount;
 }
 
 /**
