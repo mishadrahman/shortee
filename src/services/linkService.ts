@@ -273,15 +273,24 @@ export async function getLinkByShortCode(shortCode: string): Promise<LinkItem | 
 }
 
 /**
- * Look up a link document by its Firestore doc id
+ * Look up a link document by its Firestore doc id (or shortCode)
  */
 export async function getLinkById(linkId: string): Promise<LinkItem | null> {
+  const trimmedId = linkId.trim();
+
+  // 1. Check local cache first
+  const localMatch = getLocalLinks().find((l) => l.id === trimmedId || l.shortCode === trimmedId);
+  if (localMatch) {
+    return localMatch;
+  }
+
+  // 2. Fetch directly from Firestore by Document ID
   try {
-    const docRef = doc(db, LINKS_COLLECTION, linkId);
+    const docRef = doc(db, LINKS_COLLECTION, trimmedId);
     const snapshot = await getDoc(docRef);
     if (snapshot.exists()) {
       const data = snapshot.data();
-      return {
+      const item: LinkItem = {
         id: snapshot.id,
         userId: data.userId,
         originalUrl: data.originalUrl,
@@ -292,13 +301,43 @@ export async function getLinkById(linkId: string): Promise<LinkItem | null> {
         updatedAt: data.updatedAt,
         expiresAt: data.expiresAt || null,
       };
+      upsertLocalLink(item);
+      return item;
     }
   } catch (err) {
-    console.warn('Firestore getById failed, checking local storage:', err);
+    console.warn('Firestore getById failed for doc id, trying shortCode query:', err);
   }
 
-  const local = getLocalLinks().find((l) => l.id === linkId);
-  return local || null;
+  // 3. Fallback: try querying by shortCode in case shortCode was passed
+  try {
+    const q = query(
+      collection(db, LINKS_COLLECTION),
+      where('shortCode', '==', trimmedId),
+      limit(1)
+    );
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      const docSnap = snapshot.docs[0];
+      const data = docSnap.data();
+      const item: LinkItem = {
+        id: docSnap.id,
+        userId: data.userId,
+        originalUrl: data.originalUrl,
+        shortCode: data.shortCode,
+        title: data.title || 'Untitled Link',
+        clicks: data.clicks || 0,
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+        expiresAt: data.expiresAt || null,
+      };
+      upsertLocalLink(item);
+      return item;
+    }
+  } catch (err) {
+    console.warn('Firestore query by shortCode also failed:', err);
+  }
+
+  return null;
 }
 
 /**

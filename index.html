@@ -9,6 +9,26 @@
     <meta property="og:description" content="Shortee (shortee.xyz) is a fast, modern URL shortener with custom aliases, link expiration, instant QR code generation, and click analytics." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+
+    <!-- Script to restore SPA routes redirected by 404.html -->
+    <script>
+      (function () {
+        var redirect = sessionStorage.redirect;
+        delete sessionStorage.redirect;
+        if (redirect && redirect != location.href) {
+          history.replaceState(null, null, redirect);
+        }
+
+        var search = window.location.search;
+        if (search && search.startsWith('?p=')) {
+          var params = new URLSearchParams(search);
+          var path = params.get('p') || '/';
+          var query = params.get('q');
+          var target = path + (query ? '?' + query.replace(/~and~/g, '&') : '') + window.location.hash;
+          window.history.replaceState(null, null, target);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

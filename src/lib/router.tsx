@@ -45,9 +45,18 @@ function parseCurrentRoute(): RouteInfo {
     };
   }
 
-  const rawPathname = window.location.pathname || '/';
+  let rawPathname = window.location.pathname || '/';
   const search = window.location.search || '';
   const params: Record<string, string> = {};
+
+  // If redirect query param from 404.html was passed e.g. ?p=/dashboard/analytics/xyz
+  if (search && search.startsWith('?p=')) {
+    const searchParams = new URLSearchParams(search);
+    const p = searchParams.get('p');
+    if (p) {
+      rawPathname = p;
+    }
+  }
 
   const basePath = getAppBasePath();
   let normalizedPath = rawPathname;
@@ -58,6 +67,11 @@ function parseCurrentRoute(): RouteInfo {
 
   if (!normalizedPath.startsWith('/')) {
     normalizedPath = '/' + normalizedPath;
+  }
+
+  // Remove trailing slash except for root '/'
+  if (normalizedPath.length > 1 && normalizedPath.endsWith('/')) {
+    normalizedPath = normalizedPath.slice(0, -1);
   }
 
   // Check route segments
