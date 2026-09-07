@@ -109,11 +109,28 @@ function parseCurrentRoute(): RouteInfo {
     }
   }
 
+  // Support direct top-level paths like /links, /analytics/:id, /analytics, /settings by normalizing them to /dashboard/*
+  if (normalizedPath === '/links') {
+    normalizedPath = '/dashboard/links';
+  } else if (normalizedPath === '/settings') {
+    normalizedPath = '/dashboard/settings';
+  } else if (normalizedPath === '/analytics') {
+    normalizedPath = '/dashboard';
+  } else if (segments.length >= 2 && segments[0].toLowerCase() === 'analytics') {
+    params.id = segments[1];
+    normalizedPath = `/dashboard/analytics/${segments[1]}`;
+  } else if (segments.length >= 2 && segments[0].toLowerCase() === 'links') {
+    params.id = segments[1];
+    normalizedPath = `/dashboard/links`;
+  }
+
   // Check for dashboard sub-routes: /dashboard/analytics/:id, /dashboard/links, /dashboard/settings, etc.
   if (segments.length >= 3 && segments[0].toLowerCase() === 'dashboard' && segments[1].toLowerCase() === 'analytics') {
     params.id = segments[2];
   } else if (segments.length >= 3 && segments[0].toLowerCase() === 'dashboard' && segments[1].toLowerCase() === 'links') {
     params.id = segments[2];
+  } else if (segments.length >= 2 && segments[0].toLowerCase() === 'dashboard' && segments[1].toLowerCase() === 'analytics') {
+    params.id = segments[2] || '';
   }
 
   return {
