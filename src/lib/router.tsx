@@ -49,16 +49,24 @@ function parseCurrentRoute(): RouteInfo {
   const search = window.location.search || '';
   const params: Record<string, string> = {};
 
-  // If redirect query param from 404.html was passed e.g. ?p=/dashboard/links
-  if (search && search.includes('p=')) {
+  // If redirect query param from 404.html was passed e.g. ?p=/dashboard/links or ?p=/dashboard/analytics/xyz
+  if (search && (search.includes('?p=') || search.includes('&p='))) {
     try {
-      const searchParams = new URLSearchParams(search);
+      const searchParams = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
       const p = searchParams.get('p');
       if (p) {
         rawPathname = p;
       }
     } catch {
-      // ignore parse error
+      // Fallback manual regex extraction for ?p= or &p=
+      const match = search.match(/[?&]p=([^&]+)/);
+      if (match && match[1]) {
+        try {
+          rawPathname = decodeURIComponent(match[1]);
+        } catch {
+          rawPathname = match[1];
+        }
+      }
     }
   }
 
