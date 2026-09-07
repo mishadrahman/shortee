@@ -20,7 +20,6 @@ export const RedirectHandler: React.FC<RedirectHandlerProps> = ({ shortCode }) =
     let isCancelled = false;
 
     async function handleRedirect() {
-      setLoading(true);
       try {
         const link = await getLinkByShortCode(shortCode);
 
@@ -32,33 +31,28 @@ export const RedirectHandler: React.FC<RedirectHandlerProps> = ({ shortCode }) =
           return;
         }
 
-        setTargetLink(link);
-
         // Check if link has an expiration date and has expired
         if (link.expiresAt) {
           const expTime = new Date(link.expiresAt).getTime();
           if (!isNaN(expTime) && Date.now() > expTime) {
+            setTargetLink(link);
             setIsExpired(true);
             setLoading(false);
             return;
           }
         }
 
-        // Process click count increment and log click event in Firestore non-blockingly
-        try {
-          await processLinkClick(link);
-        } catch (clickErr) {
-          console.warn('Analytics logging skipped or offline:', clickErr);
-        }
+        // Non-blocking fire-and-forget analytics tracking so user redirects immediately
+        processLinkClick(link).catch((clickErr) => {
+          console.warn('Analytics logging queued in background:', clickErr);
+        });
 
         if (isCancelled) return;
 
-        // Perform the real browser redirection to originalUrl
-        setTimeout(() => {
-          if (!isCancelled && link.originalUrl) {
-            window.location.replace(link.originalUrl);
-          }
-        }, 500);
+        // INSTANT REDIRECTION - No artificial delay/countdown
+        if (link.originalUrl) {
+          window.location.replace(link.originalUrl);
+        }
       } catch (err: any) {
         console.error('Redirect processing error:', err);
         if (!isCancelled) {

@@ -228,8 +228,19 @@ export async function getUserLinks(userId: string): Promise<LinkItem[]> {
 
 /**
  * Look up a link document by its short code (used for redirection)
+ * Fast local-first lookup with Firestore fallback for sub-millisecond response.
  */
 export async function getLinkByShortCode(shortCode: string): Promise<LinkItem | null> {
+  const normalized = shortCode.trim().toLowerCase();
+
+  // 1. Check instant local cache first
+  const localLinks = getLocalLinks();
+  const cachedMatch = localLinks.find((l) => l.shortCode.toLowerCase() === normalized);
+  if (cachedMatch) {
+    return cachedMatch;
+  }
+
+  // 2. Fetch from Firestore if not in local memory
   try {
     const q = query(
       collection(db, LINKS_COLLECTION),
@@ -240,7 +251,7 @@ export async function getLinkByShortCode(shortCode: string): Promise<LinkItem | 
     if (!snapshot.empty) {
       const docSnap = snapshot.docs[0];
       const data = docSnap.data();
-      return {
+      const item: LinkItem = {
         id: docSnap.id,
         userId: data.userId,
         originalUrl: data.originalUrl,
@@ -251,14 +262,14 @@ export async function getLinkByShortCode(shortCode: string): Promise<LinkItem | 
         updatedAt: data.updatedAt,
         expiresAt: data.expiresAt || null,
       };
+      upsertLocalLink(item);
+      return item;
     }
   } catch (err) {
-    console.warn('Firestore lookup failed, checking local cache for short code:', err);
+    console.warn('Firestore lookup failed for short code:', err);
   }
 
-  // Fallback to local cache
-  const local = getLocalLinks().find((l) => l.shortCode.toLowerCase() === shortCode.toLowerCase());
-  return local || null;
+  return null;
 }
 
 /**
