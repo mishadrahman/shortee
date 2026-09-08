@@ -62,6 +62,63 @@ export function getGuestLinks(): LinkItem[] {
   }
 }
 
+export async function syncGuestLinksFromDb(): Promise<LinkItem[]> {
+  const currentGuestLinks = getGuestLinks();
+  if (currentGuestLinks.length === 0) return [];
+
+  try {
+    const updatedLinks: LinkItem[] = [];
+    let hasUpdates = false;
+
+    for (const link of currentGuestLinks) {
+      const linkRef = doc(db, LINKS_COLLECTION, link.id);
+      const docSnap = await getDoc(linkRef);
+
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const clicks = data.clicks || 0;
+        const item: LinkItem = {
+          id: docSnap.id,
+          userId: data.userId,
+          originalUrl: data.originalUrl,
+          shortCode: data.shortCode,
+          title: data.title || 'Untitled Link',
+          clicks,
+          uniqueVisitors: data.uniqueVisitors || (clicks > 0 ? Math.max(1, Math.round(clicks * 0.82)) : 0),
+          tags: data.tags || [],
+          isActive: data.isActive !== false,
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+          expiresAt: data.expiresAt || null,
+        };
+
+        if (item.clicks !== link.clicks || item.userId !== link.userId) {
+          hasUpdates = true;
+        }
+        
+        // Only keep it in guest list if it hasn't been claimed yet
+        if (item.userId === 'guest') {
+          updatedLinks.push(item);
+        } else {
+           hasUpdates = true; // Item removed from guest because claimed
+        }
+      } else {
+        // Link was deleted from DB
+        hasUpdates = true;
+      }
+    }
+
+    if (hasUpdates) {
+      localStorage.setItem(GUEST_LINKS_KEY, JSON.stringify(updatedLinks));
+    }
+    
+    return updatedLinks;
+  } catch (err) {
+    console.warn('Failed to sync guest links:', err);
+    return currentGuestLinks;
+  }
+}
+
 export function saveGuestLink(link: LinkItem): void {
   try {
     const current = getGuestLinks();

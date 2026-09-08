@@ -28,7 +28,7 @@ import {
   getGuestLinks,
   deleteGuestLink,
   claimGuestLinksToAccount,
-  subscribeToLink,
+  syncGuestLinksFromDb,
 } from '../services/linkService';
 import { LinkItem } from '../types';
 import { QRCodeCanvas } from 'qrcode.react';
@@ -60,6 +60,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenQr }) => {
   useEffect(() => {
     if (!currentUser) {
       setGuestLinks(getGuestLinks());
+      // Sync from DB once on load
+      syncGuestLinksFromDb().then(setGuestLinks);
     } else {
       // If user is logged in and has guest links saved in browser, claim them to their account!
       const unclaimed = getGuestLinks();
@@ -81,6 +83,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenQr }) => {
     const handleVisibility = () => {
       if (document.visibilityState === 'visible' && !currentUser) {
         setGuestLinks(getGuestLinks());
+        syncGuestLinksFromDb().then(setGuestLinks);
       }
     };
 
@@ -94,30 +97,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenQr }) => {
       window.removeEventListener('focus', handleVisibility);
     };
   }, [currentUser]);
-
-  // Subscribe to real-time updates for guest links
-  useEffect(() => {
-    if (currentUser || guestLinks.length === 0) return;
-
-    // Subscribe to real-time updates for each guest link
-    const unsubscribers = guestLinks.map((link) =>
-      subscribeToLink(link.id, (updatedLink) => {
-        setGuestLinks((prev) => {
-          const index = prev.findIndex((l) => l.id === updatedLink.id);
-          if (index === -1) return prev;
-          if (prev[index].clicks === updatedLink.clicks) return prev; // Prevent unnecessary renders
-          const newLinks = [...prev];
-          newLinks[index] = updatedLink;
-          return newLinks;
-        });
-      })
-    );
-
-    return () => {
-      unsubscribers.forEach((unsub) => unsub());
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser, guestLinks.map((l) => l.id).join(',')]);
 
   const calculateExpiresAt = (): string | null => {
     if (!showExpiryInput || expiryPreset === 'never') return null;
