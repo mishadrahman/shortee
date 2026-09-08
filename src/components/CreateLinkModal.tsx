@@ -216,19 +216,19 @@ export const CreateLinkModal: React.FC<CreateLinkModalProps> = ({
   return (
     <div
       id="create-link-modal-backdrop"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-fade-in"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
         id="create-link-modal-container"
-        className="relative w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-6 sm:p-7 text-slate-900 dark:text-slate-100 my-8 animate-scale-in"
+        className="relative w-full max-w-lg max-h-[90vh] sm:max-h-[85vh] flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl text-slate-900 dark:text-slate-100 my-auto animate-scale-in overflow-hidden"
       >
-        {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+        {/* Header - Fixed at the top */}
+        <div className="flex items-center justify-between p-5 sm:p-6 pb-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-700 dark:text-slate-200">
+            <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-700 dark:text-slate-200 shrink-0">
               <Link2 className="w-5 h-5" />
             </div>
             <div>
@@ -245,111 +245,78 @@ export const CreateLinkModal: React.FC<CreateLinkModalProps> = ({
           <button
             id="close-create-link-modal-btn"
             onClick={onClose}
-            className="p-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Not Logged In Warning Banner */}
-        {!currentUser && (
-          <div className="mt-4 p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-sm flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-            <div>
-              <div className="font-medium">Account required to save links</div>
-              <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
-                Sign in or create a free account to generate, organize, and monitor analytics for your short links.
-              </p>
-              <div className="mt-2.5 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    navigate('/login');
-                  }}
-                  className="px-3 py-1 text-xs font-semibold rounded-lg bg-amber-600 text-white hover:bg-amber-700"
-                >
-                  Log In
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    navigate('/signup');
-                  }}
-                  className="px-3 py-1 text-xs font-semibold rounded-lg border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 hover:bg-amber-100/50"
-                >
-                  Sign Up Free
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Success View */}
         {createdLink ? (
-          <div className="py-5 space-y-5">
-            <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80">
-              <span className="text-xs font-semibold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
-                Generated Short URL
-              </span>
-              <div className="mt-2 flex items-center justify-between gap-2 p-2.5 bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 rounded-lg">
-                <span className="font-mono font-medium text-slate-800 dark:text-slate-200 truncate select-all text-sm">
-                  {buildShortUrl(createdLink.shortCode)}
+          <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 overscroll-contain">
+              <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80">
+                <span className="text-xs font-semibold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+                  Generated Short URL
                 </span>
-                <button
-                  id="copy-created-link-btn"
-                  onClick={handleCopy}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium shrink-0 transition-colors"
+                <div className="mt-2 flex items-center justify-between gap-2 p-2.5 bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 rounded-lg">
+                  <span className="font-mono font-medium text-slate-800 dark:text-slate-200 truncate select-all text-sm">
+                    {buildShortUrl(createdLink.shortCode)}
+                  </span>
+                  <button
+                    id="copy-created-link-btn"
+                    onClick={handleCopy}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium shrink-0 transition-colors cursor-pointer"
+                  >
+                    {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copied ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+
+                <div className="mt-3 text-xs text-slate-500 dark:text-slate-400 truncate">
+                  <span className="font-medium text-slate-700 dark:text-slate-300">Target:</span> {createdLink.originalUrl}
+                </div>
+
+                {createdLink.expiresAt && (
+                  <div className="mt-2.5 flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 font-medium">
+                    <Clock className="w-3.5 h-3.5 shrink-0" />
+                    <span>
+                      Expires on {new Date(createdLink.expiresAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <a
+                  href={buildShortUrl(createdLink.shortCode)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-medium text-sm transition-colors text-center"
                 >
-                  {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                  {copied ? 'Copied' : 'Copy'}
+                  <ExternalLink className="w-4 h-4" />
+                  Open Short URL
+                </a>
+
+                <button
+                  id="open-qr-created-btn"
+                  type="button"
+                  onClick={() => {
+                    if (onOpenQr) onOpenQr(createdLink);
+                  }}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-medium text-sm transition-colors text-center cursor-pointer"
+                >
+                  <QrCode className="w-4 h-4" />
+                  View QR Code
                 </button>
               </div>
-
-              <div className="mt-3 text-xs text-slate-500 dark:text-slate-400 truncate">
-                <span className="font-medium text-slate-700 dark:text-slate-300">Target:</span> {createdLink.originalUrl}
-              </div>
-
-              {createdLink.expiresAt && (
-                <div className="mt-2.5 flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 font-medium">
-                  <Clock className="w-3.5 h-3.5 shrink-0" />
-                  <span>
-                    Expires on {new Date(createdLink.expiresAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-                  </span>
-                </div>
-              )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <a
-                href={buildShortUrl(createdLink.shortCode)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-medium text-sm transition-colors text-center"
-              >
-                <ExternalLink className="w-4 h-4" />
-                Open Short URL
-              </a>
-
-              <button
-                id="open-qr-created-btn"
-                type="button"
-                onClick={() => {
-                  if (onOpenQr) onOpenQr(createdLink);
-                }}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-medium text-sm transition-colors text-center"
-              >
-                <QrCode className="w-4 h-4" />
-                View QR Code
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between pt-2">
+            <div className="p-4 sm:px-6 border-t border-slate-100 dark:border-slate-800 shrink-0 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-xs flex items-center justify-between">
               <button
                 type="button"
                 onClick={resetForm}
-                className="text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 underline underline-offset-4"
+                className="text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 underline underline-offset-4 cursor-pointer"
               >
                 + Shorten another link
               </button>
@@ -357,7 +324,7 @@ export const CreateLinkModal: React.FC<CreateLinkModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 font-medium text-xs transition-colors"
+                className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 font-medium text-xs transition-colors cursor-pointer"
               >
                 Done
               </button>
@@ -365,16 +332,52 @@ export const CreateLinkModal: React.FC<CreateLinkModalProps> = ({
           </div>
         ) : (
           /* Form View */
-          <form onSubmit={handleSubmit} className="pt-4 space-y-4">
-            {errorMessage && (
-              <div
-                id="create-link-error-alert"
-                className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-xs flex items-start gap-2"
-              >
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
-                <span>{errorMessage}</span>
-              </div>
-            )}
+          <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4 overscroll-contain">
+              {/* Not Logged In Warning Banner */}
+              {!currentUser && (
+                <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-sm flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-medium">Account required to save links</div>
+                    <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+                      Sign in or create a free account to generate, organize, and monitor analytics for your short links.
+                    </p>
+                    <div className="mt-2.5 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          navigate('/login');
+                        }}
+                        className="px-3 py-1 text-xs font-semibold rounded-lg bg-amber-600 text-white hover:bg-amber-700 cursor-pointer"
+                      >
+                        Log In
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          navigate('/signup');
+                        }}
+                        className="px-3 py-1 text-xs font-semibold rounded-lg border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 hover:bg-amber-100/50 cursor-pointer"
+                      >
+                        Sign Up Free
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {errorMessage && (
+                <div
+                  id="create-link-error-alert"
+                  className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-xs flex items-start gap-2"
+                >
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
 
             {/* Long URL Input */}
             <div>
@@ -681,12 +684,14 @@ export const CreateLinkModal: React.FC<CreateLinkModalProps> = ({
               )}
             </div>
 
-            {/* Actions */}
-            <div className="pt-2 flex items-center justify-end gap-3">
+            </div>
+
+            {/* Sticky Actions Footer */}
+            <div className="p-4 sm:px-6 border-t border-slate-100 dark:border-slate-800 shrink-0 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-xs flex items-center justify-end gap-3">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-medium transition-colors"
+                className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-medium transition-colors cursor-pointer"
               >
                 Cancel
               </button>
@@ -695,7 +700,7 @@ export const CreateLinkModal: React.FC<CreateLinkModalProps> = ({
                 id="submit-create-link-btn"
                 type="submit"
                 disabled={loading || !url.trim()}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 font-medium text-xs transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 font-medium text-xs transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 {loading ? (
                   <span>Shortening...</span>

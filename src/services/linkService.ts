@@ -35,6 +35,7 @@ const GUEST_LINKS_KEY = 'shortee_guest_links';
 
 // Local storage helper to cache links and provide instant offline/graceful fallback
 export function getLocalLinks(): LinkItem[] {
+  if (typeof window === 'undefined' || !window.localStorage) return [];
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_LINKS_KEY);
     return raw ? JSON.parse(raw) : [];
@@ -44,6 +45,7 @@ export function getLocalLinks(): LinkItem[] {
 }
 
 function saveLocalLinks(links: LinkItem[]): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
   try {
     localStorage.setItem(LOCAL_STORAGE_LINKS_KEY, JSON.stringify(links));
   } catch (err) {
@@ -52,6 +54,7 @@ function saveLocalLinks(links: LinkItem[]): void {
 }
 
 export function getGuestLinks(): LinkItem[] {
+  if (typeof window === 'undefined' || !window.localStorage) return [];
   try {
     const raw = localStorage.getItem(GUEST_LINKS_KEY);
     if (!raw) return [];
@@ -120,6 +123,7 @@ export async function syncGuestLinksFromDb(): Promise<LinkItem[]> {
 }
 
 export function saveGuestLink(link: LinkItem): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
   try {
     const current = getGuestLinks();
     const filtered = current.filter((l) => l.id !== link.id && l.shortCode !== link.shortCode);
@@ -131,6 +135,7 @@ export function saveGuestLink(link: LinkItem): void {
 }
 
 export function deleteGuestLink(linkId: string): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
   try {
     const current = getGuestLinks();
     const updated = current.filter((l) => l.id !== linkId);
@@ -586,24 +591,29 @@ export async function processLinkClick(link: LinkItem): Promise<{ success: boole
       updatePayload.uniqueVisitors = increment(1);
     }
 
-    const incrementPromise = updateDoc(linkRef, updatePayload).catch(async (updateErr) => {
-      console.warn('updateDoc failed, attempting setDoc with full document:', updateErr);
-      const fallbackFullDoc: Record<string, any> = {
-        ...link,
-        shortCodeLower: link.shortCode.toLowerCase(),
-        clicks: nextClicks,
-        uniqueVisitors: nextUniqueVisitors,
-        updatedAt: now,
-      };
-      await setDoc(linkRef, fallbackFullDoc, { merge: true });
-    });
+    // Fast atomic update with retry on contention
+    const commitIncrement = async (retries = 2): Promise<void> => {
+      try {
+        await updateDoc(linkRef, updatePayload);
+      } catch (updateErr) {
+        if (retries > 0) {
+          await new Promise((r) => setTimeout(r, 100));
+          return commitIncrement(retries - 1);
+        }
+        console.warn('Firestore updateDoc failed after retries:', updateErr);
+      }
+    };
 
-    // Always record click events, whether guest or logged in user, so the counter updates in DB
+    const incrementPromise = commitIncrement();
+
+    // Record click event in parallel
     const addEventPromise = addDoc(collection(db, CLICKS_COLLECTION), clickEvent).catch((evtErr) => {
       console.warn('addDoc click_events error:', evtErr);
     });
 
+    // Wait for both the primary click counter and the detailed click event to be acknowledged
     await Promise.allSettled([incrementPromise, addEventPromise]);
+
     return { success: true, newClicks: nextClicks };
   } catch (err) {
     console.warn('Firestore link click processing error:', err);

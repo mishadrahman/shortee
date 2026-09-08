@@ -56,12 +56,12 @@ export const RedirectHandler: React.FC<RedirectHandlerProps> = ({ shortCode }) =
         setTargetLink(link);
 
         // 1. Process click tracking and ENSURE Firestore receives and confirms it before redirecting!
-        // We race processLinkClick against a 3500ms safety timeout so the visitor is never blocked,
-        // while giving Firestore ample time to complete the commit even on cold connections.
+        // We race processLinkClick against a 5000ms safety timeout so the visitor is never blocked on broken connections,
+        // while giving Firestore ample time to complete the commit even on slower mobile networks.
         try {
           await Promise.race([
             processLinkClick(link),
-            new Promise((resolve) => setTimeout(resolve, 3500)),
+            new Promise((resolve) => setTimeout(resolve, 5000)),
           ]);
         } catch (clickErr) {
           console.warn('Click tracking warning:', clickErr);
@@ -70,7 +70,11 @@ export const RedirectHandler: React.FC<RedirectHandlerProps> = ({ shortCode }) =
         // 2. Direct browser to original URL
         if (link.originalUrl && !hasRedirectedRef.current) {
           hasRedirectedRef.current = true;
-          window.location.replace(link.originalUrl);
+          let dest = link.originalUrl.trim();
+          if (!/^https?:\/\//i.test(dest)) {
+            dest = 'https://' + dest;
+          }
+          window.location.replace(dest);
         }
       } catch (err: any) {
         console.error('Redirect processing error:', err);
@@ -239,14 +243,18 @@ export const RedirectHandler: React.FC<RedirectHandlerProps> = ({ shortCode }) =
           <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400">
             <p>Taking longer than usual?</p>
             <a
-              href={targetLink.originalUrl}
+              href={
+                /^https?:\/\//i.test(targetLink.originalUrl.trim())
+                  ? targetLink.originalUrl.trim()
+                  : 'https://' + targetLink.originalUrl.trim()
+              }
               onClick={() => {
                 hasRedirectedRef.current = true;
                 processLinkClick(targetLink).catch(() => {});
               }}
               className="inline-flex items-center gap-1 mt-1 font-semibold text-slate-800 dark:text-slate-200 underline hover:text-indigo-600 transition-colors"
             >
-              Continue to {targetLink.originalUrl.slice(0, 30)}... <ExternalLink className="w-3 h-3" />
+              Continue to {targetLink.originalUrl.replace(/^https?:\/\//i, '').slice(0, 30)}... <ExternalLink className="w-3 h-3" />
             </a>
           </div>
         )}

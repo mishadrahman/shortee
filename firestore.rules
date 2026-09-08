@@ -41,15 +41,10 @@ service cloud.firestore {
         ||
         // Gate C: Anonymous visitor tracking clicks on short link redirect.
         // HARDENED SECURITY: Only clicks, uniqueVisitors, updatedAt, and shortCodeLower can be touched!
-        // Critical settings (isActive, expiresAt, originalUrl, shortCode, userId) CANNOT BE MODIFIED!
+        // Critical settings (isActive, expiresAt, originalUrl, shortCode, userId, title, tags) CANNOT BE MODIFIED!
         (
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clicks', 'uniqueVisitors', 'updatedAt', 'shortCodeLower'])
-          && request.resource.data.userId == resource.data.userId
-          && request.resource.data.originalUrl == resource.data.originalUrl
-          && request.resource.data.shortCode == resource.data.shortCode
-          && request.resource.data.isActive == resource.data.isActive
-          && request.resource.data.expiresAt == resource.data.expiresAt
-          && request.resource.data.clicks >= resource.data.clicks
+          && request.resource.data.clicks is number
         )
       );
     }
