@@ -494,9 +494,12 @@ export async function processLinkClick(link: LinkItem): Promise<{ success: boole
       await setDoc(linkRef, updatePayload, { merge: true });
     });
 
-    const addEventPromise = addDoc(collection(db, CLICKS_COLLECTION), clickEvent).catch((evtErr) => {
-      console.warn('addDoc click_events error:', evtErr);
-    });
+    let addEventPromise = Promise.resolve() as any;
+    if (link.userId !== 'guest') {
+      addEventPromise = addDoc(collection(db, CLICKS_COLLECTION), clickEvent).catch((evtErr) => {
+        console.warn('addDoc click_events error:', evtErr);
+      });
+    }
 
     await Promise.allSettled([incrementPromise, addEventPromise]);
     return { success: true, newClicks: nextClicks };
