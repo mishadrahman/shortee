@@ -287,7 +287,10 @@ export async function createShortLink({
   }
 
   try {
-    await setDoc(linkDocRef, newLink);
+    await setDoc(linkDocRef, {
+      ...newLink,
+      shortCodeLower: shortCode.toLowerCase(),
+    });
   } catch (err) {
     console.warn('Saved to offline cache (Firestore write queued or unavailable):', err);
   }
@@ -379,8 +382,9 @@ export async function getUserLinks(userId: string): Promise<LinkItem[]> {
  */
 export async function getLinkByShortCode(shortCode: string): Promise<LinkItem | null> {
   const cleanCode = shortCode.trim();
+  const lowerCode = cleanCode.toLowerCase();
 
-  // 1. Authoritative Firestore query for the short link
+  // 1. Authoritative Firestore query for the short link (exact match first)
   try {
     const q = query(
       collection(db, LINKS_COLLECTION),
@@ -410,12 +414,45 @@ export async function getLinkByShortCode(shortCode: string): Promise<LinkItem | 
       return item;
     }
   } catch (err) {
-    console.warn('Firestore lookup error for short code, checking cache:', err);
+    console.warn('Firestore lookup error for short code:', err);
   }
 
-  // 2. Fallback to local storage cache if offline or network unreachable
+  // 2. Case-insensitive lookup via shortCodeLower
+  try {
+    const qLower = query(
+      collection(db, LINKS_COLLECTION),
+      where('shortCodeLower', '==', lowerCode),
+      limit(1)
+    );
+    const snapshotLower = await getDocs(qLower);
+    if (!snapshotLower.empty) {
+      const docSnap = snapshotLower.docs[0];
+      const data = docSnap.data();
+      const clicks = data.clicks || 0;
+      const item: LinkItem = {
+        id: docSnap.id,
+        userId: data.userId,
+        originalUrl: data.originalUrl,
+        shortCode: data.shortCode,
+        title: data.title || 'Untitled Link',
+        clicks,
+        uniqueVisitors: data.uniqueVisitors || (clicks > 0 ? Math.max(1, Math.round(clicks * 0.82)) : 0),
+        tags: data.tags || [],
+        isActive: data.isActive !== false,
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+        expiresAt: data.expiresAt || null,
+      };
+      upsertLocalLink(item);
+      return item;
+    }
+  } catch (err) {
+    console.warn('Firestore shortCodeLower query error:', err);
+  }
+
+  // 3. Fallback to local storage cache if offline or network unreachable
   const localLinks = getLocalLinks();
-  const cachedMatch = localLinks.find((l) => l.shortCode.toLowerCase() === cleanCode.toLowerCase());
+  const cachedMatch = localLinks.find((l) => l.shortCode.toLowerCase() === lowerCode);
   if (cachedMatch) {
     return cachedMatch;
   }
@@ -515,6 +552,10 @@ export async function processLinkClick(link: LinkItem): Promise<{ success: boole
   };
   upsertLocalLink(updatedLink);
 
+  if (link.userId === 'guest' || !link.userId) {
+    saveGuestLink(updatedLink);
+  }
+
   // Cross-tab broadcast for instant multi-tab UI refresh
   try {
     localStorage.setItem('shortee_last_click_ping', `${link.id}_${nextClicks}_${Date.now()}`);
@@ -523,7 +564,7 @@ export async function processLinkClick(link: LinkItem): Promise<{ success: boole
   // 2. Prepare ClickEvent document
   const clickEvent: Record<string, any> = {
     linkId: link.id,
-    userId: link.userId || '',
+    userId: link.userId || 'guest',
     linkTitle: link.title || link.shortCode || 'Short Link',
     shortCode: link.shortCode,
     timestamp: now,
@@ -547,8 +588,9 @@ export async function processLinkClick(link: LinkItem): Promise<{ success: boole
 
     const incrementPromise = updateDoc(linkRef, updatePayload).catch(async (updateErr) => {
       console.warn('updateDoc failed, attempting setDoc with full document:', updateErr);
-      const fallbackFullDoc: LinkItem = {
+      const fallbackFullDoc: Record<string, any> = {
         ...link,
+        shortCodeLower: link.shortCode.toLowerCase(),
         clicks: nextClicks,
         uniqueVisitors: nextUniqueVisitors,
         updatedAt: now,

@@ -29,6 +29,7 @@ import {
   deleteGuestLink,
   claimGuestLinksToAccount,
   syncGuestLinksFromDb,
+  subscribeToLink,
 } from '../services/linkService';
 import { LinkItem } from '../types';
 import { QRCodeCanvas } from 'qrcode.react';
@@ -96,6 +97,31 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenQr }) => {
       window.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('focus', handleVisibility);
     };
+  }, [currentUser]);
+
+  // Real-time synchronization for freshly created link in hero section
+  useEffect(() => {
+    if (!createdResult?.id) return;
+    const unsub = subscribeToLink(createdResult.id, (fresh) => {
+      if (fresh) {
+        setCreatedResult(fresh);
+        if (!currentUser) {
+          setGuestLinks(getGuestLinks());
+        }
+      }
+    });
+    return () => unsub();
+  }, [createdResult?.id, currentUser]);
+
+  // Periodic guest link sync to catch background clicks across all links
+  useEffect(() => {
+    if (currentUser) return;
+    const interval = setInterval(() => {
+      syncGuestLinksFromDb().then((fresh) => {
+        setGuestLinks(fresh);
+      });
+    }, 2500);
+    return () => clearInterval(interval);
   }, [currentUser]);
 
   const calculateExpiresAt = (): string | null => {
@@ -415,6 +441,26 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenQr }) => {
                     <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
                       Destination: {createdResult.originalUrl}
                     </p>
+
+                    {/* Live Real-Time Click Feedback */}
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <MousePointerClick className="w-3.5 h-3.5" />
+                        {createdResult.clicks || 0} {createdResult.clicks === 1 ? 'click' : 'clicks'} tracked
+                      </span>
+                      {currentUser && (
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/dashboard/analytics/${createdResult.id}`)}
+                          className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 transition-opacity cursor-pointer shadow-xs"
+                        >
+                          <BarChart3 className="w-3 h-3" />
+                          View Analytics
+                        </button>
+                      )}
+                    </div>
+
                     {!currentUser && (
                       <p className="text-[11px] text-amber-700 dark:text-amber-500/90 mt-1.5 flex items-center gap-1 font-medium cursor-pointer" onClick={() => navigate('/signup')}>
                         <Lock className="w-3 h-3" />
