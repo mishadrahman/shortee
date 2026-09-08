@@ -13,7 +13,7 @@ import {
   addDoc,
   onSnapshot,
 } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import { LinkItem, ClickEvent } from '../types';
 import {
   generateRandomShortCode,
@@ -722,14 +722,19 @@ export function subscribeToLink(
 export function subscribeToLinkClickEvents(
   linkId: string,
   onUpdate: (events: ClickEvent[]) => void,
-  onError?: (err: any) => void
+  onError?: (err: any) => void,
+  ownerUserId?: string
 ): () => void {
   try {
-    const q = query(
-      collection(db, CLICKS_COLLECTION),
+    const targetUserId = ownerUserId || auth.currentUser?.uid;
+    const constraints: any[] = [
       where('linkId', '==', linkId),
-      limit(100)
-    );
+      limit(100),
+    ];
+    if (targetUserId) {
+      constraints.push(where('userId', '==', targetUserId));
+    }
+    const q = query(collection(db, CLICKS_COLLECTION), ...constraints);
 
     const unsubscribe = onSnapshot(
       q,
@@ -881,13 +886,20 @@ export async function deleteShortLink(linkId: string): Promise<void> {
 /**
  * Fetch click events for a specific link
  */
-export async function getLinkClickEvents(linkId: string): Promise<ClickEvent[]> {
+export async function getLinkClickEvents(
+  linkId: string,
+  ownerUserId?: string
+): Promise<ClickEvent[]> {
   try {
-    const q = query(
-      collection(db, CLICKS_COLLECTION),
+    const targetUserId = ownerUserId || auth.currentUser?.uid;
+    const constraints: any[] = [
       where('linkId', '==', linkId),
-      limit(100)
-    );
+      limit(100),
+    ];
+    if (targetUserId) {
+      constraints.push(where('userId', '==', targetUserId));
+    }
+    const q = query(collection(db, CLICKS_COLLECTION), ...constraints);
     const snapshot = await getDocs(q);
     const events: ClickEvent[] = [];
     snapshot.forEach((docSnap) => {

@@ -18,13 +18,18 @@
       "type": "object",
       "properties": {
         "id": { "type": "string", "description": "Unique link document ID" },
-        "userId": { "type": "string", "description": "UID of owner user" },
+        "userId": { "type": "string", "description": "UID of owner user or guest" },
         "originalUrl": { "type": "string", "format": "uri", "description": "Destination HTTP/HTTPS URL" },
         "shortCode": { "type": "string", "pattern": "^[a-zA-Z0-9_-]+$", "description": "Unique alphanumeric short code" },
+        "shortCodeLower": { "type": "string", "description": "Lowercase short code for case-insensitive lookup" },
         "title": { "type": "string", "description": "Optional human-readable title" },
         "clicks": { "type": "number", "description": "All-time visit count" },
+        "uniqueVisitors": { "type": "number", "description": "Estimated unique visitor count" },
+        "isActive": { "type": "boolean", "description": "Whether the short link redirection is active or paused" },
+        "expiresAt": { "type": "string", "description": "Optional ISO timestamp when link expires" },
+        "tags": { "type": "array", "description": "Custom organizational tags" },
         "createdAt": { "type": "string", "description": "ISO timestamp when shortened" },
-        "updatedAt": { "type": "string", "description": "ISO timestamp of last click/modification" }
+        "updatedAt": { "type": "string", "description": "ISO timestamp of last click or modification" }
       },
       "required": ["id", "userId", "originalUrl", "shortCode", "clicks", "createdAt"]
     },

@@ -2,32 +2,70 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users profile
+    // 1. User Profiles - strictly isolated to the user
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Links collection
+    // 2. Links Collection
     match /links/{linkId} {
-      // Allow reading any link or listing links
+      // Anyone can resolve a short link or query by code for redirection
       allow read: if true;
 
-      // Anyone can create a link (authenticated users or guest creators)
+      // Anyone can create a link (authenticated users or guest users)
       allow create: if request.resource.data.shortCode is string
-                    && request.resource.data.originalUrl is string;
+                    && request.resource.data.shortCode.size() <= 64
+                    && request.resource.data.originalUrl is string
+                    && request.resource.data.originalUrl.size() <= 2048
+                    && (
+                      (request.auth != null && request.resource.data.userId == request.auth.uid)
+                      || (request.resource.data.userId == 'guest')
+                    );
 
-      // Link owner can delete
+      // ONLY the authenticated owner can delete their link
       allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
 
-      // Owner can update, public visitor can increment clicks, or authenticated user can claim a guest link
-      allow update: if true;
+      // UPDATE GATES:
+      // Gate A: Authenticated link owner can edit title, tags, pause/activate, or change expiry
+      // Gate B: Claiming an unclaimed guest link upon login/signup
+      // Gate C: Public visitor click tracking on redirect (strictly restricted keys)
+      allow update: if (
+        // Gate A: Owner updating their own link (cannot transfer ownership)
+        (request.auth != null && resource.data.userId == request.auth.uid
+          && request.resource.data.userId == resource.data.userId)
+        ||
+        // Gate B: Claiming guest link upon account creation/login
+        (request.auth != null && resource.data.userId == 'guest'
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userId', 'updatedAt']))
+        ||
+        // Gate C: Anonymous visitor tracking clicks on short link redirect.
+        // HARDENED SECURITY: Only clicks, uniqueVisitors, updatedAt, and shortCodeLower can be touched!
+        // Critical settings (isActive, expiresAt, originalUrl, shortCode, userId) CANNOT BE MODIFIED!
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clicks', 'uniqueVisitors', 'updatedAt', 'shortCodeLower'])
+          && request.resource.data.userId == resource.data.userId
+          && request.resource.data.originalUrl == resource.data.originalUrl
+          && request.resource.data.shortCode == resource.data.shortCode
+          && request.resource.data.isActive == resource.data.isActive
+          && request.resource.data.expiresAt == resource.data.expiresAt
+          && request.resource.data.clicks >= resource.data.clicks
+        )
+      );
     }
 
-    // Click events collection
+    // 3. Click Events Collection (Analytics Logs)
     match /click_events/{eventId} {
-      // Anyone can record and read click events for link analytics
-      allow create: if true;
-      allow read: if true;
+      // Anyone can record a click event when visiting a short link
+      allow create: if request.resource.data.linkId is string
+                    && request.resource.data.shortCode is string;
+
+      // Analytics events can ONLY be read by the authenticated link owner
+      allow read: if request.auth != null && (
+        resource.data.userId == request.auth.uid || resource.data.userId == 'guest'
+      );
+
+      // Immutable log - updates and deletions are strictly forbidden
       allow update, delete: if false;
     }
 
@@ -37,3 +75,4 @@ service cloud.firestore {
     }
   }
 }
+

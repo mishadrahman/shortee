@@ -35,10 +35,12 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { useAppRouter } from '../lib/router';
+import { useAuth } from '../context/AuthContext';
 import {
   getLinkById,
   getLinkClickEvents,
   getLocalLinks,
+  getGuestLinks,
   subscribeToLink,
   subscribeToLinkClickEvents,
   exportLinkAnalyticsCsv,
@@ -59,6 +61,7 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
   onOpenQrModal,
 }) => {
   const { navigate } = useAppRouter();
+  const { currentUser } = useAuth();
 
   const [link, setLink] = useState<LinkItem | null>(() => {
     if (typeof window !== 'undefined') {
@@ -82,18 +85,44 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
   const [timeRange, setTimeRange] = useState<TimeRange>('7d');
   const [togglingStatus, setTogglingStatus] = useState(false);
 
+  // Security gate helper
+  const verifyAccessPermission = (target: LinkItem | null): boolean => {
+    if (!target) return false;
+    if (currentUser) {
+      if (target.userId && target.userId !== 'guest' && target.userId !== currentUser.uid) {
+        return false;
+      }
+      return true;
+    }
+    // Guest visitor: only allowed if link was created locally in this browser or is an unclaimed guest link
+    const isGuestOwner = getGuestLinks().some((g) => g.id === target.id);
+    if (!isGuestOwner && target.userId !== 'guest') {
+      return false;
+    }
+    return true;
+  };
+
   const loadData = async (showLoadingState = false) => {
     if (!linkId) return;
     try {
       if (showLoadingState) setRefreshing(true);
       const linkData = await getLinkById(linkId);
       if (!linkData) {
-        setError('Shortened link not found or you do not have permission to view it.');
+        setError('Shortened link not found or has expired.');
+        setLink(null);
         return;
       }
-      setLink(linkData);
 
-      const events = await getLinkClickEvents(linkData.id);
+      if (!verifyAccessPermission(linkData)) {
+        setError('Access Denied: You do not have permission to view or manage analytics for this link.');
+        setLink(null);
+        return;
+      }
+
+      setLink(linkData);
+      setError(null);
+
+      const events = await getLinkClickEvents(linkData.id, linkData.userId);
       setClickEvents(events);
     } catch (err: any) {
       console.error('Error fetching analytics:', err);
@@ -113,13 +142,34 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
     // Authoritative lookup and real-time subscription
     getLinkById(linkId).then((resolvedLink) => {
       if (resolvedLink) {
+        if (!verifyAccessPermission(resolvedLink)) {
+          setError('Access Denied: You do not have permission to view or manage analytics for this link.');
+          setLink(null);
+          return;
+        }
+
         setLink(resolvedLink);
+        setError(null);
+
         unsubLink = subscribeToLink(resolvedLink.id, (fresh) => {
-          if (fresh) setLink(fresh);
+          if (fresh) {
+            if (!verifyAccessPermission(fresh)) {
+              setError('Access Denied: You do not have permission to view or manage analytics for this link.');
+              setLink(null);
+              return;
+            }
+            setLink(fresh);
+          }
         });
-        unsubEvents = subscribeToLinkClickEvents(resolvedLink.id, (freshEvents) => {
-          setClickEvents(freshEvents);
-        });
+
+        unsubEvents = subscribeToLinkClickEvents(
+          resolvedLink.id,
+          (freshEvents) => {
+            setClickEvents(freshEvents);
+          },
+          undefined,
+          resolvedLink.userId
+        );
       }
     });
 
@@ -138,7 +188,7 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
       window.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('focus', handleVisibility);
     };
-  }, [linkId]);
+  }, [linkId, currentUser?.uid]);
 
   const handleCopy = async () => {
     if (!link) return;
@@ -154,6 +204,9 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
 
   const handleToggleStatus = async () => {
     if (!link || togglingStatus) return;
+    if (!currentUser || (link.userId && link.userId !== 'guest' && link.userId !== currentUser.uid)) {
+      return;
+    }
     setTogglingStatus(true);
     const newStatus = link.isActive !== false ? false : true;
     const ok = await toggleLinkStatus(link.id, link.isActive !== false);
