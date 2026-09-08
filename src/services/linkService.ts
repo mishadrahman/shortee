@@ -26,6 +26,8 @@ import {
   getOrCreateVisitorId,
   checkAndRecordUniqueVisit,
   buildShortUrl,
+  isBotOrCrawler,
+  isSessionDuplicateClick,
 } from '../lib/urlUtils';
 
 const LINKS_COLLECTION = 'links';
@@ -542,6 +544,19 @@ export async function getLinkById(linkId: string): Promise<LinkItem | null> {
  * Increment click count on a link document atomically and record safe anonymous click event
  */
 export async function processLinkClick(link: LinkItem): Promise<{ success: boolean; newClicks: number }> {
+  // 1. Filter out automated bots and social media preview crawlers (Facebook, WhatsApp, Twitter, etc.)
+  if (isBotOrCrawler()) {
+    console.info('[Analytics] Social media preview crawler / bot visit filtered out for link:', link.shortCode);
+    return { success: true, newClicks: link.clicks || 0 };
+  }
+
+  // 2. Filter out rapid repeat clicks within the same session/tab (cooldown 25 seconds)
+  // This avoids double-counting from mobile in-app browser pre-fetching, webview reloading, or app switching
+  if (isSessionDuplicateClick(link.id, 25)) {
+    console.info('[Analytics] Rapid repeat click deduplicated within 25s window for link:', link.shortCode);
+    return { success: true, newClicks: link.clicks || 0 };
+  }
+
   const linkRef = doc(db, LINKS_COLLECTION, link.id);
   const now = new Date().toISOString();
   const nextClicks = (link.clicks || 0) + 1;

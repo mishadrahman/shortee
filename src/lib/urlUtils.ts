@@ -155,11 +155,16 @@ export function getSafeDeviceType(): 'Desktop' | 'Mobile' | 'Tablet' {
 }
 
 /**
- * Safely parse browser name from user agent
+ * Safely parse browser name from user agent, prioritizing in-app browsers
  */
 export function getSafeBrowserName(): string {
   if (typeof window === 'undefined') return 'Other';
-  const ua = navigator.userAgent;
+  const ua = navigator.userAgent || '';
+  if (/FBAN|FBAV|FB_IAB/i.test(ua)) return 'Facebook In-App';
+  if (/Instagram/i.test(ua)) return 'Instagram';
+  if (/LinkedInApp/i.test(ua)) return 'LinkedIn';
+  if (/Twitter|TwitterAndroid|TwitterforiPhone/i.test(ua)) return 'Twitter';
+  if (/TikTok/i.test(ua)) return 'TikTok';
   if (ua.includes('Firefox')) return 'Firefox';
   if (ua.includes('SamsungBrowser')) return 'Samsung Internet';
   if (ua.includes('Opera') || ua.includes('OPR')) return 'Opera';
@@ -185,21 +190,42 @@ export function getSafeOS(): string {
 }
 
 /**
- * Clean human-readable referrer
+ * Clean human-readable referrer with in-app scheme detection
  */
 export function getSafeReferrer(): string {
-  if (typeof document === 'undefined' || !document.referrer) {
+  if (typeof document === 'undefined') return 'Direct / None';
+  const ref = document.referrer || '';
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+
+  if (/android-app:\/\/com\.facebook/i.test(ref) || /FBAN|FBAV|FB_IAB/i.test(ua)) {
+    return 'Facebook';
+  }
+  if (/android-app:\/\/com\.instagram/i.test(ref) || /Instagram/i.test(ua)) {
+    return 'Instagram';
+  }
+  if (/android-app:\/\/com\.twitter/i.test(ref)) {
+    return 'X / Twitter';
+  }
+  if (/android-app:\/\/com\.whatsapp/i.test(ref)) {
+    return 'WhatsApp';
+  }
+  if (/android-app:\/\/com\.linkedin/i.test(ref)) {
+    return 'LinkedIn';
+  }
+
+  if (!ref) {
     return 'Direct / None';
   }
+
   try {
-    const refUrl = new URL(document.referrer);
+    const refUrl = new URL(ref);
     const host = refUrl.hostname.toLowerCase();
     if (host.includes('google.')) return 'Google Search';
-    if (host.includes('twitter.com') || host.includes('x.com')) return 'X / Twitter';
+    if (host.includes('twitter.com') || host.includes('x.com') || host.includes('t.co')) return 'X / Twitter';
     if (host.includes('linkedin.com')) return 'LinkedIn';
-    if (host.includes('facebook.com') || host.includes('fb.me')) return 'Facebook';
+    if (host.includes('facebook.com') || host.includes('fb.me') || host.includes('l.facebook.com') || host.includes('lm.facebook.com')) return 'Facebook';
     if (host.includes('reddit.com')) return 'Reddit';
-    if (host.includes('youtube.com')) return 'YouTube';
+    if (host.includes('youtube.com') || host.includes('youtu.be')) return 'YouTube';
     if (host.includes('github.com')) return 'GitHub';
     if (host.includes('instagram.com')) return 'Instagram';
     if (host.includes('whatsapp.com')) return 'WhatsApp';
@@ -225,6 +251,102 @@ export function getOrCreateVisitorId(): string {
     return vid;
   } catch {
     return 'anon_' + Math.random().toString(36).substring(2, 10);
+  }
+}
+
+/**
+ * Checks if current visitor is an automated bot, preview crawler, or web scraper.
+ * Standard URL shortener filter (e.g., Bitly, Dub): prevents Facebook, Twitter, WhatsApp
+ * preview bots and automated crawlers from inflating human click analytics.
+ */
+export function isBotOrCrawler(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+
+  // 1. Check navigator.webdriver (automated headless browsers like Selenium, Puppeteer)
+  if (navigator.webdriver) {
+    return true;
+  }
+
+  const ua = (navigator.userAgent || '').toLowerCase();
+
+  // 2. Comprehensive bot / crawler / social media preview scraper signatures
+  const botSignatures = [
+    'facebookexternalhit',
+    'facebot',
+    'meta-externalagent',
+    'facebookcatalog',
+    'facebookplatform',
+    'twitterbot',
+    'linkedinbot',
+    'whatsapp',
+    'telegrambot',
+    'slackbot',
+    'discordbot',
+    'skypeuripreview',
+    'pinterest',
+    'googlebot',
+    'bingbot',
+    'yandexbot',
+    'baiduspider',
+    'duckduckbot',
+    'applebot',
+    'headlesschrome',
+    'phantomjs',
+    'bytespider',
+    'petalbot',
+    'semrushbot',
+    'ahrefsbot',
+    'mj12bot',
+    'crawler',
+    'spider',
+    'scraper',
+    'bot/',
+    '/bot',
+    'preview',
+  ];
+
+  return botSignatures.some((signature) => ua.includes(signature));
+}
+
+/**
+ * Rapid repeat click deduplication for the same visitor/session.
+ * Prevents mobile in-app browsers (Facebook, Instagram, LinkedIn) from registering
+ * 2-3 clicks for a single human tap due to pre-fetching + WebView mount + app-switching reloads.
+ * Default cooldown: 30 seconds.
+ */
+export function isSessionDuplicateClick(linkId: string, cooldownSeconds = 30): boolean {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    const sessionKey = `shortee_session_hit_${linkId}`;
+    const localKey = `shortee_recent_hit_${linkId}`;
+    const now = Date.now();
+    const cooldownMs = cooldownSeconds * 1000;
+
+    // Check sessionStorage (per tab / in-app browser session)
+    const sessionHit = sessionStorage.getItem(sessionKey);
+    if (sessionHit) {
+      const lastSessionTime = parseInt(sessionHit, 10);
+      if (!isNaN(lastSessionTime) && now - lastSessionTime < cooldownMs) {
+        return true;
+      }
+    }
+
+    // Check localStorage (per browser/device instance)
+    const localHit = localStorage.getItem(localKey);
+    if (localHit) {
+      const lastLocalTime = parseInt(localHit, 10);
+      if (!isNaN(lastLocalTime) && now - lastLocalTime < cooldownMs) {
+        return true;
+      }
+    }
+
+    // Record this hit timestamp
+    sessionStorage.setItem(sessionKey, now.toString());
+    localStorage.setItem(localKey, now.toString());
+    return false;
+  } catch {
+    return false;
   }
 }
 

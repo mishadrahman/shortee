@@ -17,9 +17,11 @@ export const RedirectHandler: React.FC<RedirectHandlerProps> = ({ shortCode }) =
   const [isPaused, setIsPaused] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const hasRedirectedRef = useRef(false);
+  const hasStartedProcessingRef = useRef(false);
 
   useEffect(() => {
-    if (hasRedirectedRef.current) return;
+    if (hasRedirectedRef.current || hasStartedProcessingRef.current) return;
+    hasStartedProcessingRef.current = true;
     let isMounted = true;
 
     async function handleRedirect() {
