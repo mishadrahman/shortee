@@ -48,15 +48,21 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({ link, onClose }) => {
   return (
     <div
       id="qr-code-modal-backdrop"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity animate-fade-in"
+      className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs transition-opacity animate-fade-in"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div
-        id="qr-code-modal-container"
-        className="relative w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-6 sm:p-7 overflow-hidden text-slate-900 dark:text-slate-100 animate-scale-in"
+      <div 
+        className="min-h-full flex items-center justify-center p-4 text-left"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
       >
+        <div
+          id="qr-code-modal-container"
+          className="relative w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-6 sm:p-7 overflow-hidden text-slate-900 dark:text-slate-100 animate-scale-in my-8"
+        >
         {/* Header */}
         <div className="flex items-start justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center gap-3">
@@ -84,27 +90,28 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({ link, onClose }) => {
         <div className="my-6 flex flex-col items-center justify-center">
           <div
             ref={canvasRef}
-            className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center justify-center"
+            className="p-3 sm:p-5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center justify-center aspect-square"
           >
             <QRCodeCanvas
               value={fullShortUrl}
-              size={qrSize}
+              size={qrSize} // Actual resolution for download
               fgColor={fgColor}
               bgColor="#ffffff"
               level="H"
               includeMargin={true}
+              style={{ width: '220px', height: '220px' }} // Fixed visual display size
             />
           </div>
-          <p className="mt-3 text-xs text-slate-500 dark:text-slate-400 text-center">
+          <p className="mt-3 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 text-center px-2 break-all">
             Points to: <span className="font-mono font-medium text-slate-700 dark:text-slate-300">{fullShortUrl}</span>
           </p>
         </div>
 
         {/* QR Customization quick options */}
-        <div className="mb-6 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+        <div className="mb-6 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2">
-            <span className="text-slate-500 dark:text-slate-400 font-medium">Color:</span>
-            <div className="flex gap-1.5">
+            <span className="text-slate-500 dark:text-slate-400 font-medium shrink-0">Color:</span>
+            <div className="flex gap-1.5 shrink-0">
               {[
                 { label: 'Slate', color: '#0f172a' },
                 { label: 'Indigo', color: '#4338ca' },
@@ -115,7 +122,7 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({ link, onClose }) => {
                   key={c.color}
                   type="button"
                   onClick={() => setFgColor(c.color)}
-                  className={`w-5 h-5 rounded-full border cursor-pointer transition-transform hover:scale-110 ${
+                  className={`w-6 h-6 sm:w-5 sm:h-5 rounded-full border cursor-pointer transition-transform hover:scale-110 shrink-0 ${
                     fgColor === c.color ? 'ring-2 ring-offset-2 ring-slate-900 dark:ring-slate-100' : 'border-transparent'
                   }`}
                   style={{ backgroundColor: c.color }}
@@ -124,16 +131,17 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({ link, onClose }) => {
               ))}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-slate-500 dark:text-slate-400 font-medium">Size:</span>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-slate-500 dark:text-slate-400 font-medium shrink-0">Size:</span>
             <select
               value={qrSize}
               onChange={(e) => setQrSize(Number(e.target.value))}
-              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1 text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none"
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1.5 sm:py-1 text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none shrink-0"
             >
               <option value={180}>Small (180px)</option>
               <option value={240}>Medium (240px)</option>
               <option value={320}>Large (320px)</option>
+              <option value={512}>X-Large (512px)</option>
             </select>
           </div>
         </div>
@@ -170,6 +178,7 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({ link, onClose }) => {
             Test link in new tab <ExternalLink className="w-3 h-3" />
           </a>
         </div>
+      </div>
       </div>
     </div>
   );
