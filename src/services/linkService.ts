@@ -547,8 +547,14 @@ export async function processLinkClick(link: LinkItem): Promise<{ success: boole
     }
 
     const incrementPromise = updateDoc(linkRef, updatePayload).catch(async (updateErr) => {
-      console.warn('updateDoc failed, attempting setDoc with merge:', updateErr);
-      await setDoc(linkRef, updatePayload, { merge: true });
+      console.warn('updateDoc failed, attempting setDoc with full document:', updateErr);
+      const fallbackFullDoc: LinkItem = {
+        ...link,
+        clicks: nextClicks,
+        uniqueVisitors: nextUniqueVisitors,
+        updatedAt: now,
+      };
+      await setDoc(linkRef, fallbackFullDoc, { merge: true });
     });
 
     // Always record click events, whether guest or logged in user, so the counter updates in DB

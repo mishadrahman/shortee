@@ -54,11 +54,12 @@ export const RedirectHandler: React.FC<RedirectHandlerProps> = ({ shortCode }) =
         setTargetLink(link);
 
         // 1. Process click tracking and ENSURE Firestore receives and confirms it before redirecting!
-        // We race processLinkClick against a 600ms safety timeout so the visitor is never blocked.
+        // We race processLinkClick against a 2500ms safety timeout so the visitor is never blocked,
+        // while giving Firestore ample time to complete the commit even on cold connections.
         try {
           await Promise.race([
             processLinkClick(link),
-            new Promise((resolve) => setTimeout(resolve, 600)),
+            new Promise((resolve) => setTimeout(resolve, 2500)),
           ]);
         } catch (clickErr) {
           console.warn('Click tracking warning:', clickErr);
