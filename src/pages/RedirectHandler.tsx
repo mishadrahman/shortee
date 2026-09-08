@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { ExternalLink, Link2, AlertCircle, Home, ClockAlert } from 'lucide-react';
 import { getLinkByShortCode, processLinkClick } from '../services/linkService';
 import { LinkItem } from '../types';
@@ -16,15 +16,17 @@ export const RedirectHandler: React.FC<RedirectHandlerProps> = ({ shortCode }) =
   const [isExpired, setIsExpired] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const hasRedirectedRef = useRef(false);
 
   useEffect(() => {
-    let isCancelled = false;
+    if (hasRedirectedRef.current) return;
+    let isMounted = true;
 
     async function handleRedirect() {
       try {
         const link = await getLinkByShortCode(shortCode);
 
-        if (isCancelled) return;
+        if (!isMounted) return;
 
         if (!link) {
           setNotFound(true);
@@ -65,15 +67,14 @@ export const RedirectHandler: React.FC<RedirectHandlerProps> = ({ shortCode }) =
           console.warn('Click tracking warning:', clickErr);
         }
 
-        if (isCancelled) return;
-
         // 2. Direct browser to original URL
-        if (link.originalUrl) {
+        if (link.originalUrl && !hasRedirectedRef.current) {
+          hasRedirectedRef.current = true;
           window.location.replace(link.originalUrl);
         }
       } catch (err: any) {
         console.error('Redirect processing error:', err);
-        if (!isCancelled) {
+        if (isMounted) {
           setErrorMessage('Error retrieving link destination.');
           setLoading(false);
         }
@@ -83,7 +84,7 @@ export const RedirectHandler: React.FC<RedirectHandlerProps> = ({ shortCode }) =
     handleRedirect();
 
     return () => {
-      isCancelled = true;
+      isMounted = false;
     };
   }, [shortCode]);
 

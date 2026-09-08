@@ -380,15 +380,7 @@ export async function getUserLinks(userId: string): Promise<LinkItem[]> {
 export async function getLinkByShortCode(shortCode: string): Promise<LinkItem | null> {
   const cleanCode = shortCode.trim();
 
-  // 1. Instant Cache Check (Memory & LocalStorage)
-  // If the link was created on this machine or previously accessed, resolve in 0ms!
-  const localLinks = getLocalLinks();
-  const cachedMatch = localLinks.find((l) => l.shortCode.toLowerCase() === cleanCode.toLowerCase());
-  if (cachedMatch) {
-    return cachedMatch;
-  }
-
-  // 2. Authoritative Firestore query for new visitors / other devices
+  // 1. Authoritative Firestore query for the short link
   try {
     const q = query(
       collection(db, LINKS_COLLECTION),
@@ -419,6 +411,13 @@ export async function getLinkByShortCode(shortCode: string): Promise<LinkItem | 
     }
   } catch (err) {
     console.warn('Firestore lookup error for short code, checking cache:', err);
+  }
+
+  // 2. Fallback to local storage cache if offline or network unreachable
+  const localLinks = getLocalLinks();
+  const cachedMatch = localLinks.find((l) => l.shortCode.toLowerCase() === cleanCode.toLowerCase());
+  if (cachedMatch) {
+    return cachedMatch;
   }
 
   return null;
