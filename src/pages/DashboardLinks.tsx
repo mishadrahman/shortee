@@ -20,6 +20,7 @@ import {
   Users,
   Tag,
   MousePointerClick,
+  Edit3,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useAppRouter } from '../lib/router';
@@ -33,6 +34,7 @@ import {
 } from '../services/linkService';
 import { LinkItem } from '../types';
 import { buildShortUrl } from '../lib/urlUtils';
+import { EditLinkModal } from '../components/EditLinkModal';
 
 interface DashboardLinksProps {
   onOpenCreateModal: () => void;
@@ -67,6 +69,7 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [editingLink, setEditingLink] = useState<LinkItem | null>(null);
 
   const fetchLinks = async (showRefreshState = true) => {
     if (!currentUser) return;
@@ -556,6 +559,16 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
                       <ExternalLink className="w-3.5 h-3.5" />
                     </a>
 
+                    {/* Edit Destination URL */}
+                    <button
+                      id={`edit-btn-${link.id}`}
+                      onClick={() => setEditingLink(link)}
+                      title="Edit Destination URL & Details"
+                      className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+
                     {/* QR Code */}
                     <button
                       id={`qr-btn-${link.id}`}
@@ -592,6 +605,20 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
             })}
           </div>
         </div>
+      )}
+
+      {/* Edit Link Destination & Settings Modal */}
+      {editingLink && (
+        <EditLinkModal
+          link={editingLink}
+          isOpen={!!editingLink}
+          onClose={() => setEditingLink(null)}
+          onLinkUpdated={(updated) => {
+            setLinks((prev) =>
+              prev.map((item) => (item.id === updated.id ? updated : item))
+            );
+          }}
+        />
       )}
     </div>
   );

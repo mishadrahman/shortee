@@ -11,6 +11,7 @@ export interface LinkItem {
   createdAt: string; // ISO 8601 string
   updatedAt: string; // ISO 8601 string
   expiresAt?: string | null; // ISO 8601 string or null if never expires
+  countries?: Record<string, number>; // Country code -> click count aggregation
 }
 
 export interface ClickEvent {
@@ -24,6 +25,9 @@ export interface ClickEvent {
   deviceType: 'Desktop' | 'Mobile' | 'Tablet';
   browser: string;
   operatingSystem?: string;
+  country?: string; // Country name e.g. 'Bangladesh', 'United States'
+  countryCode?: string; // ISO 2-letter code e.g. 'BD', 'US'
+  city?: string;
   isUnique?: boolean;
   visitorId?: string;
 }

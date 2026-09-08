@@ -21,6 +21,7 @@ import {
   Activity,
   Users,
   Tag,
+  Edit3,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useAppRouter } from '../lib/router';
@@ -33,7 +34,8 @@ import {
   getUserRecentClickEvents,
 } from '../services/linkService';
 import { LinkItem, ClickEvent } from '../types';
-import { buildShortUrl } from '../lib/urlUtils';
+import { buildShortUrl, getCountryFlagEmoji } from '../lib/urlUtils';
+import { EditLinkModal } from '../components/EditLinkModal';
 
 interface DashboardOverviewProps {
   onOpenCreateModal: () => void;
@@ -64,6 +66,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingLink, setEditingLink] = useState<LinkItem | null>(null);
 
   const fetchLinks = async (showLoadingState = true) => {
     if (!currentUser) return;
@@ -449,6 +452,15 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                         <ExternalLink className="w-4 h-4" />
                       </a>
 
+                      {/* Edit Destination URL */}
+                      <button
+                        onClick={() => setEditingLink(link)}
+                        title="Edit Destination URL"
+                        className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+
                       {/* QR */}
                       <button
                         onClick={() => onOpenQrModal(link)}
@@ -543,7 +555,13 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                           {evt.deviceType}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400 mt-0.5">
+                        <span className="inline-flex items-center gap-1 font-medium text-slate-600 dark:text-slate-300">
+                          <span>{getCountryFlagEmoji(evt.countryCode || evt.country || 'XX')}</span>
+                          <span>{evt.country || 'Unknown'}</span>
+                          {evt.city && <span className="text-[10px] text-slate-400">({evt.city})</span>}
+                        </span>
+                        <span>•</span>
                         <span>Source: <strong className="text-slate-600 dark:text-slate-300 font-normal">{evt.referrer || 'Direct'}</strong></span>
                         <span>•</span>
                         <span>Browser: <strong className="text-slate-600 dark:text-slate-300 font-normal">{evt.browser}</strong></span>
@@ -569,6 +587,18 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           )}
         </div>
       </div>
+
+      {/* Edit Link Destination Modal */}
+      {editingLink && (
+        <EditLinkModal
+          link={editingLink}
+          isOpen={!!editingLink}
+          onClose={() => setEditingLink(null)}
+          onLinkUpdated={(updated) => {
+            setLinks((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+          }}
+        />
+      )}
     </div>
   );
 };

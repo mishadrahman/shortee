@@ -24,6 +24,9 @@ import {
   TrendingUp,
   Cpu,
   Compass,
+  Edit3,
+  MapPin,
+  Flag,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -47,7 +50,8 @@ import {
   toggleLinkStatus,
 } from '../services/linkService';
 import { LinkItem, ClickEvent } from '../types';
-import { buildShortUrl } from '../lib/urlUtils';
+import { buildShortUrl, getCountryFlagEmoji, getCountryNameFromCode } from '../lib/urlUtils';
+import { EditLinkModal } from '../components/EditLinkModal';
 
 interface LinkAnalyticsPageProps {
   linkId: string;
@@ -84,6 +88,7 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
   const [copied, setCopied] = useState(false);
   const [timeRange, setTimeRange] = useState<TimeRange>('7d');
   const [togglingStatus, setTogglingStatus] = useState(false);
+  const [isEditingModalOpen, setIsEditingModalOpen] = useState(false);
 
   // Security gate helper
   const verifyAccessPermission = (target: LinkItem | null): boolean => {
@@ -323,6 +328,33 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
   }
   const sortedReferrers = Object.entries(referrerCounts).sort((a, b) => b[1] - a[1]);
 
+  // Geographic / Countries Breakdown (Geo Tracking)
+  const countryCounts: Record<string, { count: number; code?: string }> = {};
+  clickEvents.forEach((evt) => {
+    const country = evt.country || 'Unknown Location';
+    if (!countryCounts[country]) {
+      countryCounts[country] = { count: 0, code: evt.countryCode };
+    }
+    countryCounts[country].count += 1;
+    if (evt.countryCode && !countryCounts[country].code) {
+      countryCounts[country].code = evt.countryCode;
+    }
+  });
+
+  // Fallback to aggregated countries on link document if click events are not yet logged
+  if (Object.keys(countryCounts).length === 0 && link?.countries && Object.keys(link.countries).length > 0) {
+    Object.entries(link.countries).forEach(([country, cnt]) => {
+      countryCounts[country] = { count: cnt };
+    });
+  }
+
+  // If still empty but totalClicks > 0
+  if (Object.keys(countryCounts).length === 0 && totalClicks > 0) {
+    countryCounts['Global / Direct'] = { count: totalClicks };
+  }
+
+  const sortedCountries = Object.entries(countryCounts).sort((a, b) => b[1].count - a[1].count);
+
   if (loading) {
     return (
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 text-center">
@@ -440,12 +472,28 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
               <div className="flex items-center gap-1.5 truncate">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                 <span className="truncate max-w-md">{link.originalUrl}</span>
+                <button
+                  onClick={() => setIsEditingModalOpen(true)}
+                  title="Edit Destination URL"
+                  className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                >
+                  <Edit3 className="w-3 h-3" />
+                </button>
               </div>
             </div>
           </div>
 
           {/* Action Button Strip */}
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setIsEditingModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 transition-colors cursor-pointer shadow-xs"
+              title="Edit destination URL, title, tags, or expiration"
+            >
+              <Edit3 className="w-3.5 h-3.5 text-indigo-500" />
+              <span>Edit Destination</span>
+            </button>
+
             <button
               onClick={handleToggleStatus}
               disabled={togglingStatus}
@@ -824,6 +872,50 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
           )}
         </div>
 
+        {/* Geographic Origin (Geo Tracking) */}
+        <div className="p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
+          <div className="flex items-center justify-between mb-5">
+            <h3 className="font-semibold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-emerald-500" />
+              Geographic Origin (Geo Tracking)
+            </h3>
+            <span className="text-xs text-slate-400 font-medium">{sortedCountries.length} countries</span>
+          </div>
+
+          {sortedCountries.length === 0 ? (
+            <p className="text-xs text-slate-400 italic py-6 text-center">
+              No geographic visitor data recorded yet.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {sortedCountries.slice(0, 6).map(([countryName, info]) => {
+                const count = info.count;
+                const pct = Math.round((count / totalLogged) * 100);
+                const flagEmoji = getCountryFlagEmoji(info.code || countryName);
+                return (
+                  <div key={countryName} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-2 font-medium text-slate-700 dark:text-slate-300 truncate max-w-[200px]">
+                        <span className="text-sm shrink-0">{flagEmoji}</span>
+                        <span className="truncate">{countryName}</span>
+                      </span>
+                      <span className="font-mono text-slate-500">
+                        {count} ({pct}%)
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-500 rounded-full transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {/* Top Browsers */}
         <div className="p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
           <div className="flex items-center justify-between mb-5">
@@ -872,7 +964,7 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
               <Clock className="w-4 h-4 text-slate-500" />
               Real-Time Activity Log
             </h3>
-            <p className="text-xs text-slate-500">Live stream of individual visitor events</p>
+            <p className="text-xs text-slate-500">Live stream of individual visitor events with geo tracking</p>
           </div>
           <span className="text-xs font-mono text-slate-400">
             Showing {Math.min(clickEvents.length, 30)} recent events
@@ -889,6 +981,7 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
               <thead>
                 <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400 font-semibold uppercase text-[10px]">
                   <th className="py-2.5 px-3">Timestamp (Local)</th>
+                  <th className="py-2.5 px-3">Location (Geo)</th>
                   <th className="py-2.5 px-3">Visitor Type</th>
                   <th className="py-2.5 px-3">Device / OS</th>
                   <th className="py-2.5 px-3">Browser</th>
@@ -900,6 +993,13 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
                   <tr key={evt.id || idx} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
                     <td className="py-3 px-3 font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap">
                       {new Date(evt.timestamp).toLocaleString()}
+                    </td>
+                    <td className="py-3 px-3 font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="text-sm">{getCountryFlagEmoji(evt.countryCode || evt.country || 'XX')}</span>
+                        <span>{evt.country || 'Unknown'}</span>
+                        {evt.city && <span className="text-[10px] text-slate-400 font-normal">({evt.city})</span>}
+                      </span>
                     </td>
                     <td className="py-3 px-3">
                       <span
@@ -928,6 +1028,18 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
           </div>
         )}
       </div>
+
+      {/* Edit Link Destination Modal */}
+      {isEditingModalOpen && link && (
+        <EditLinkModal
+          link={link}
+          isOpen={isEditingModalOpen}
+          onClose={() => setIsEditingModalOpen(false)}
+          onLinkUpdated={(updated) => {
+            setLink(updated);
+          }}
+        />
+      )}
     </div>
   );
 };

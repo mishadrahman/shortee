@@ -405,3 +405,155 @@ export function buildUtmUrl(
     return baseUrl;
   }
 }
+
+/**
+ * Common timezone prefix to Country & Code mapping for instantaneous offline/fallback geo detection
+ */
+const TIMEZONE_COUNTRY_MAP: Record<string, { country: string; code: string }> = {
+  'Asia/Dhaka': { country: 'Bangladesh', code: 'BD' },
+  'Asia/Kolkata': { country: 'India', code: 'IN' },
+  'Asia/Calcutta': { country: 'India', code: 'IN' },
+  'Asia/Karachi': { country: 'Pakistan', code: 'PK' },
+  'Asia/Dubai': { country: 'United Arab Emirates', code: 'AE' },
+  'Asia/Riyadh': { country: 'Saudi Arabia', code: 'SA' },
+  'Asia/Singapore': { country: 'Singapore', code: 'SG' },
+  'Asia/Tokyo': { country: 'Japan', code: 'JP' },
+  'Asia/Seoul': { country: 'South Korea', code: 'KR' },
+  'Asia/Bangkok': { country: 'Thailand', code: 'TH' },
+  'Asia/Jakarta': { country: 'Indonesia', code: 'ID' },
+  'Asia/Kuala_Lumpur': { country: 'Malaysia', code: 'MY' },
+  'Europe/London': { country: 'United Kingdom', code: 'GB' },
+  'Europe/Paris': { country: 'France', code: 'FR' },
+  'Europe/Berlin': { country: 'Germany', code: 'DE' },
+  'Europe/Rome': { country: 'Italy', code: 'IT' },
+  'Europe/Madrid': { country: 'Spain', code: 'ES' },
+  'Europe/Amsterdam': { country: 'Netherlands', code: 'NL' },
+  'Europe/Zurich': { country: 'Switzerland', code: 'CH' },
+  'Europe/Stockholm': { country: 'Sweden', code: 'SE' },
+  'Europe/Dublin': { country: 'Ireland', code: 'IE' },
+  'America/New_York': { country: 'United States', code: 'US' },
+  'America/Chicago': { country: 'United States', code: 'US' },
+  'America/Denver': { country: 'United States', code: 'US' },
+  'America/Los_Angeles': { country: 'United States', code: 'US' },
+  'America/Phoenix': { country: 'United States', code: 'US' },
+  'America/Toronto': { country: 'Canada', code: 'CA' },
+  'America/Vancouver': { country: 'Canada', code: 'CA' },
+  'America/Sao_Paulo': { country: 'Brazil', code: 'BR' },
+  'America/Mexico_City': { country: 'Mexico', code: 'MX' },
+  'Australia/Sydney': { country: 'Australia', code: 'AU' },
+  'Australia/Melbourne': { country: 'Australia', code: 'AU' },
+  'Pacific/Auckland': { country: 'New Zealand', code: 'NZ' },
+  'Africa/Cairo': { country: 'Egypt', code: 'EG' },
+  'Africa/Johannesburg': { country: 'South Africa', code: 'ZA' },
+  'Africa/Lagos': { country: 'Nigeria', code: 'NG' },
+  'Africa/Nairobi': { country: 'Kenya', code: 'KE' },
+};
+
+/**
+ * Converts 2-letter ISO country code into Unicode flag emoji (e.g., 'BD' -> 🇧🇩, 'US' -> 🇺🇸)
+ */
+export function getCountryFlagEmoji(countryCode?: string): string {
+  if (!countryCode || countryCode.length !== 2) return '🌐';
+  const code = countryCode.toUpperCase();
+  if (code === 'XX' || code === 'UN') return '🌐';
+  const codePoints = code
+    .split('')
+    .map((char) => 127397 + char.charCodeAt(0));
+  return String.fromCodePoint(...codePoints);
+}
+
+/**
+ * Gets standard country display name from 2-letter code
+ */
+export function getCountryNameFromCode(code?: string, defaultName = 'Unknown Location'): string {
+  if (!code) return defaultName;
+  const upper = code.toUpperCase();
+  try {
+    const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+    const name = regionNames.of(upper);
+    if (name) return name;
+  } catch {}
+  return defaultName;
+}
+
+/**
+ * Detects visitor geolocation (Country, Code, City) with caching and fast fallback.
+ * Uses lightweight client-side cache -> fast IP geo API -> timezone fallback.
+ */
+export async function detectVisitorGeo(): Promise<{ country: string; countryCode: string; city?: string }> {
+  if (typeof window === 'undefined') {
+    return { country: 'Unknown', countryCode: 'XX' };
+  }
+
+  const CACHE_KEY = 'shortee_geo_cache';
+
+  // 1. Check local session cache
+  try {
+    const cached = sessionStorage.getItem(CACHE_KEY) || localStorage.getItem(CACHE_KEY);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed?.country && parsed?.countryCode) {
+        return parsed;
+      }
+    }
+  } catch {}
+
+  // 2. Prepare timezone fallback
+  let fallbackCountry = 'Unknown';
+  let fallbackCode = 'XX';
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz && TIMEZONE_COUNTRY_MAP[tz]) {
+      fallbackCountry = TIMEZONE_COUNTRY_MAP[tz].country;
+      fallbackCode = TIMEZONE_COUNTRY_MAP[tz].code;
+    } else if (tz) {
+      // General continent heuristic
+      if (tz.startsWith('America/')) {
+        fallbackCountry = 'United States';
+        fallbackCode = 'US';
+      } else if (tz.startsWith('Europe/')) {
+        fallbackCountry = 'Europe';
+        fallbackCode = 'EU';
+      } else if (tz.startsWith('Asia/')) {
+        fallbackCountry = 'Asia';
+        fallbackCode = 'AS';
+      }
+    }
+  } catch {}
+
+  // 3. Try ultra-fast public IP-to-Country lookup with 1200ms timeout
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1200);
+
+    const response = await fetch('https://api.country.is/', {
+      signal: controller.signal,
+      cache: 'force-cache',
+    });
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data?.country && typeof data.country === 'string' && data.country.length === 2) {
+        const code = data.country.toUpperCase();
+        const countryName = getCountryNameFromCode(code, fallbackCountry !== 'Unknown' ? fallbackCountry : code);
+        const result = { country: countryName, countryCode: code };
+        
+        try {
+          sessionStorage.setItem(CACHE_KEY, JSON.stringify(result));
+          localStorage.setItem(CACHE_KEY, JSON.stringify(result));
+        } catch {}
+        return result;
+      }
+    }
+  } catch {
+    // Timeout or network offline -> use fallback
+  }
+
+  const result = { country: fallbackCountry, countryCode: fallbackCode };
+  try {
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify(result));
+  } catch {}
+  return result;
+}
+

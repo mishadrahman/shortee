@@ -28,6 +28,9 @@ import {
   buildShortUrl,
   isBotOrCrawler,
   isSessionDuplicateClick,
+  detectVisitorGeo,
+  getCountryFlagEmoji,
+  getCountryNameFromCode,
 } from '../lib/urlUtils';
 
 const LINKS_COLLECTION = 'links';
@@ -494,6 +497,7 @@ export async function getLinkById(linkId: string): Promise<LinkItem | null> {
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
         expiresAt: data.expiresAt || null,
+        countries: data.countries || {},
       };
       upsertLocalLink(item);
       return item;
@@ -527,6 +531,7 @@ export async function getLinkById(linkId: string): Promise<LinkItem | null> {
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
         expiresAt: data.expiresAt || null,
+        countries: data.countries || {},
       };
       upsertLocalLink(item);
       return item;
@@ -563,11 +568,22 @@ export async function processLinkClick(link: LinkItem): Promise<{ success: boole
   const isUnique = checkAndRecordUniqueVisit(link.id);
   const nextUniqueVisitors = (link.uniqueVisitors || 0) + (isUnique ? 1 : 0);
 
-  // 1. Immediately update local storage and notify any listeners in other tabs
+  // 2. Detect Visitor Geolocation (Country / CountryCode / City)
+  let geo: { country: string; countryCode: string; city?: string } = { country: 'Unknown', countryCode: 'XX', city: undefined };
+  try {
+    geo = await detectVisitorGeo();
+  } catch {}
+
+  const currentCountries = { ...(link.countries || {}) };
+  const countryKey = geo.country || 'Unknown';
+  currentCountries[countryKey] = (currentCountries[countryKey] || 0) + 1;
+
+  // 3. Immediately update local storage and notify any listeners in other tabs
   const updatedLink: LinkItem = {
     ...link,
     clicks: nextClicks,
     uniqueVisitors: nextUniqueVisitors,
+    countries: currentCountries,
     updatedAt: now,
   };
   upsertLocalLink(updatedLink);
@@ -581,7 +597,7 @@ export async function processLinkClick(link: LinkItem): Promise<{ success: boole
     localStorage.setItem('shortee_last_click_ping', `${link.id}_${nextClicks}_${Date.now()}`);
   } catch {}
 
-  // 2. Prepare ClickEvent document
+  // 4. Prepare ClickEvent document
   const clickEvent: Record<string, any> = {
     linkId: link.id,
     userId: link.userId || 'guest',
@@ -592,14 +608,18 @@ export async function processLinkClick(link: LinkItem): Promise<{ success: boole
     deviceType: getSafeDeviceType() || 'Desktop',
     browser: getSafeBrowserName() || 'Other',
     operatingSystem: getSafeOS() || 'Other OS',
+    country: geo.country || 'Unknown',
+    countryCode: geo.countryCode || 'XX',
+    city: geo.city || null,
     isUnique,
     visitorId: getOrCreateVisitorId(),
   };
 
-  // 3. Atomically update Firestore
+  // 5. Atomically update Firestore
   try {
     const updatePayload: Record<string, any> = {
       clicks: increment(1),
+      [`countries.${countryKey}`]: increment(1),
       updatedAt: now,
     };
     if (isUnique) {
@@ -778,6 +798,9 @@ export function subscribeToLinkClickEvents(
             deviceType: data.deviceType || 'Desktop',
             browser: data.browser || 'Other',
             operatingSystem: data.operatingSystem || 'Other',
+            country: data.country || 'Unknown',
+            countryCode: data.countryCode || 'XX',
+            city: data.city || undefined,
             isUnique: data.isUnique ?? true,
           });
         });
@@ -828,6 +851,9 @@ export async function getUserRecentClickEvents(
         deviceType: data.deviceType || 'Desktop',
         browser: data.browser || 'Other',
         operatingSystem: data.operatingSystem || 'Other',
+        country: data.country || 'Unknown',
+        countryCode: data.countryCode || 'XX',
+        city: data.city || undefined,
         isUnique: data.isUnique ?? true,
       });
     });
@@ -872,6 +898,9 @@ export function subscribeToUserClickEvents(
             deviceType: data.deviceType || 'Desktop',
             browser: data.browser || 'Other',
             operatingSystem: data.operatingSystem || 'Other',
+            country: data.country || 'Unknown',
+            countryCode: data.countryCode || 'XX',
+            city: data.city || undefined,
             isUnique: data.isUnique ?? true,
           });
         });
@@ -909,6 +938,60 @@ export async function deleteShortLink(linkId: string): Promise<void> {
 }
 
 /**
+ * Update an existing short link's destination URL, title, tags, or expiration date
+ */
+export async function updateShortLink(
+  linkId: string,
+  updates: {
+    originalUrl?: string;
+    title?: string;
+    tags?: string[];
+    expiresAt?: string | null;
+    isActive?: boolean;
+  }
+): Promise<LinkItem | null> {
+  const now = new Date().toISOString();
+  const trimmedId = linkId.trim();
+
+  // 1. Update in local cache
+  const local = getLocalLinks();
+  const index = local.findIndex((l) => l.id === trimmedId || l.shortCode === trimmedId);
+  let updatedItem: LinkItem | null = null;
+
+  if (index !== -1) {
+    updatedItem = {
+      ...local[index],
+      ...updates,
+      updatedAt: now,
+    };
+    local[index] = updatedItem;
+    saveLocalLinks(local);
+  }
+
+  // Also update guest links if in guest list
+  const guestLinks = getGuestLinks();
+  const guestIdx = guestLinks.findIndex((l) => l.id === trimmedId || l.shortCode === trimmedId);
+  if (guestIdx !== -1 && updatedItem) {
+    guestLinks[guestIdx] = updatedItem;
+    localStorage.setItem(GUEST_LINKS_KEY, JSON.stringify(guestLinks));
+  }
+
+  // 2. Persist to Firestore
+  try {
+    const docRef = doc(db, LINKS_COLLECTION, trimmedId);
+    const firestoreUpdates: Record<string, any> = {
+      ...updates,
+      updatedAt: now,
+    };
+    await updateDoc(docRef, firestoreUpdates);
+  } catch (err) {
+    console.warn('Failed to update link in Firestore, cached locally:', err);
+  }
+
+  return updatedItem;
+}
+
+/**
  * Fetch click events for a specific link
  */
 export async function getLinkClickEvents(
@@ -940,6 +1023,9 @@ export async function getLinkClickEvents(
         deviceType: data.deviceType || 'Desktop',
         browser: data.browser || 'Other',
         operatingSystem: data.operatingSystem || 'Other',
+        country: data.country || 'Unknown',
+        countryCode: data.countryCode || 'XX',
+        city: data.city || undefined,
         isUnique: data.isUnique ?? true,
       });
     });
@@ -961,6 +1047,7 @@ export function exportLinkAnalyticsCsv(link: LinkItem, events: ClickEvent[]): vo
     'Timestamp (UTC)',
     'Short Code',
     'Destination URL',
+    'Country',
     'Device Type',
     'Operating System',
     'Browser',
@@ -972,6 +1059,7 @@ export function exportLinkAnalyticsCsv(link: LinkItem, events: ClickEvent[]): vo
     `"${e.timestamp}"`,
     `"${e.shortCode}"`,
     `"${link.originalUrl.replace(/"/g, '""')}"`,
+    `"${e.country || 'Unknown'}"`,
     `"${e.deviceType || 'Desktop'}"`,
     `"${e.operatingSystem || 'Other'}"`,
     `"${e.browser || 'Other'}"`,
