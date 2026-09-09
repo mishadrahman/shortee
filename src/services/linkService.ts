@@ -98,6 +98,8 @@ export async function syncGuestLinksFromDb(): Promise<LinkItem[]> {
           createdAt: data.createdAt,
           updatedAt: data.updatedAt,
           expiresAt: data.expiresAt || null,
+          password: data.password || null,
+          isPasswordProtected: Boolean(data.password && data.password.trim()),
         };
 
         if (item.clicks !== link.clicks || item.userId !== link.userId) {
@@ -232,6 +234,7 @@ export async function createShortLink({
   customAlias,
   expiresAt,
   tags,
+  password,
 }: {
   userId?: string;
   originalUrl: string;
@@ -239,6 +242,7 @@ export async function createShortLink({
   customAlias?: string;
   expiresAt?: string | null;
   tags?: string[];
+  password?: string | null;
 }): Promise<LinkItem> {
   const urlCheck = validateLongUrl(originalUrl);
   if (!urlCheck.valid) {
@@ -273,6 +277,7 @@ export async function createShortLink({
   const linkDocRef = doc(collection(db, LINKS_COLLECTION));
   const now = new Date().toISOString();
   const resolvedUserId = userId?.trim() || 'guest';
+  const cleanPassword = password && password.trim() ? password.trim() : null;
 
   const newLink: LinkItem = {
     id: linkDocRef.id,
@@ -287,6 +292,8 @@ export async function createShortLink({
     createdAt: now,
     updatedAt: now,
     expiresAt: expiresAt || null,
+    password: cleanPassword,
+    isPasswordProtected: Boolean(cleanPassword),
   };
 
   // Always save locally first so user gets instant responsive UI
@@ -363,6 +370,8 @@ export async function getUserLinks(userId: string): Promise<LinkItem[]> {
         createdAt: data.createdAt || new Date().toISOString(),
         updatedAt: data.updatedAt || new Date().toISOString(),
         expiresAt: data.expiresAt || null,
+        password: data.password || null,
+        isPasswordProtected: Boolean(data.password && data.password.trim()),
       });
     });
 
@@ -419,6 +428,8 @@ export async function getLinkByShortCode(shortCode: string): Promise<LinkItem | 
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
         expiresAt: data.expiresAt || null,
+        password: data.password || null,
+        isPasswordProtected: Boolean(data.password && data.password.trim()),
       };
       upsertLocalLink(item);
       return item;
@@ -452,6 +463,8 @@ export async function getLinkByShortCode(shortCode: string): Promise<LinkItem | 
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
         expiresAt: data.expiresAt || null,
+        password: data.password || null,
+        isPasswordProtected: Boolean(data.password && data.password.trim()),
       };
       upsertLocalLink(item);
       return item;
@@ -502,6 +515,8 @@ export async function getLinkById(linkId: string): Promise<LinkItem | null> {
           updatedAt: data.updatedAt,
           expiresAt: data.expiresAt || null,
           countries: data.countries || {},
+          password: data.password || null,
+          isPasswordProtected: Boolean(data.password && data.password.trim()),
         };
         upsertLocalLink(item);
         return item;
@@ -536,6 +551,8 @@ export async function getLinkById(linkId: string): Promise<LinkItem | null> {
           updatedAt: data.updatedAt,
           expiresAt: data.expiresAt || null,
           countries: data.countries || {},
+          password: data.password || null,
+          isPasswordProtected: Boolean(data.password && data.password.trim()),
         };
         upsertLocalLink(item);
         return item;
@@ -703,6 +720,8 @@ export function subscribeToUserLinks(
             createdAt: data.createdAt || new Date().toISOString(),
             updatedAt: data.updatedAt || new Date().toISOString(),
             expiresAt: data.expiresAt || null,
+            password: data.password || null,
+            isPasswordProtected: Boolean(data.password && data.password.trim()),
           });
         });
 
@@ -757,6 +776,8 @@ export function subscribeToLink(
             createdAt: data.createdAt,
             updatedAt: data.updatedAt,
             expiresAt: data.expiresAt || null,
+            password: data.password || null,
+            isPasswordProtected: Boolean(data.password && data.password.trim()),
           };
           upsertLocalLink(item);
           onUpdate(item);
@@ -961,6 +982,7 @@ export async function updateShortLink(
     tags?: string[];
     expiresAt?: string | null;
     isActive?: boolean;
+    password?: string | null;
   }
 ): Promise<LinkItem | null> {
   const now = new Date().toISOString();
@@ -972,10 +994,16 @@ export async function updateShortLink(
   let targetLink: LinkItem | null = null;
   let resolvedDocId = trimmedId;
 
+  const cleanUpdates = { ...updates };
+  if (updates.password !== undefined) {
+    cleanUpdates.password = updates.password && updates.password.trim() ? updates.password.trim() : null;
+  }
+
   if (index !== -1) {
     targetLink = {
       ...local[index],
-      ...updates,
+      ...cleanUpdates,
+      isPasswordProtected: Boolean(cleanUpdates.password !== undefined ? cleanUpdates.password : local[index].password),
       updatedAt: now,
     };
     if (auth.currentUser && targetLink.userId === 'guest') {
@@ -1046,6 +1074,9 @@ export async function updateShortLink(
     if (updates.expiresAt !== undefined) {
       firestoreUpdates.expiresAt = updates.expiresAt; // Can be string or null
     }
+    if (updates.password !== undefined) {
+      firestoreUpdates.password = cleanUpdates.password;
+    }
 
     // If logged-in user is editing an unclaimed guest link, claim ownership
     if (auth.currentUser && (!docSnap.exists() || docSnap.data()?.userId === 'guest')) {
@@ -1066,6 +1097,7 @@ export async function updateShortLink(
     // Refresh local cache with fully resolved record if we found the document in Firestore
     if (docSnap.exists()) {
       const freshData = docSnap.data();
+      const finalPassword = updates.password !== undefined ? cleanUpdates.password : (freshData.password || null);
       const resolvedItem: LinkItem = {
         id: docSnap.id,
         userId: firestoreUpdates.userId || freshData.userId,
@@ -1079,6 +1111,8 @@ export async function updateShortLink(
         createdAt: freshData.createdAt || now,
         updatedAt: now,
         expiresAt: updates.expiresAt !== undefined ? updates.expiresAt : (freshData.expiresAt || null),
+        password: finalPassword,
+        isPasswordProtected: Boolean(finalPassword && finalPassword.trim()),
       };
       upsertLocalLink(resolvedItem);
       targetLink = resolvedItem;

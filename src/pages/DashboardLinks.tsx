@@ -21,6 +21,7 @@ import {
   Tag,
   MousePointerClick,
   Edit3,
+  Lock,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useAppRouter } from '../lib/router';
@@ -449,6 +450,16 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
                       ) : (
                         <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400">
                           Active
+                        </span>
+                      )}
+
+                      {(link.isPasswordProtected || link.password) && (
+                        <span
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-800/50"
+                          title="Password protected link"
+                        >
+                          <Lock className="w-2.5 h-2.5" />
+                          Protected
                         </span>
                       )}
 

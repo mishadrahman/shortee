@@ -14,6 +14,10 @@ import {
   ShieldCheck,
   CheckCircle2,
   Sparkles,
+  Lock,
+  KeyRound,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { validateLongUrl, buildShortUrl, buildUtmUrl } from '../lib/urlUtils';
 import { updateShortLink } from '../services/linkService';
@@ -45,6 +49,9 @@ export const EditLinkModal: React.FC<EditLinkModalProps> = ({
 
   const [showUtmBuilder, setShowUtmBuilder] = useState(false);
   const [showExpiration, setShowExpiration] = useState(false);
+  const [showPasswordProtection, setShowPasswordProtection] = useState(false);
+  const [password, setPassword] = useState('');
+  const [showPasswordText, setShowPasswordText] = useState(false);
 
   const [utm, setUtm] = useState<UtmParams>({
     source: '',
@@ -78,6 +85,9 @@ export const EditLinkModal: React.FC<EditLinkModalProps> = ({
           ? new Date(link.expiresAt).toISOString().slice(0, 16)
           : ''
       );
+      setPassword(link.password || '');
+      setShowPasswordProtection(!!link.password || !!link.isPasswordProtected);
+      setShowPasswordText(false);
       setErrorMessage(null);
       setSuccessMessage(null);
       setShowUtmBuilder(false);
@@ -185,6 +195,7 @@ export const EditLinkModal: React.FC<EditLinkModalProps> = ({
         tags,
         isActive,
         expiresAt: newExpiresAt,
+        password: showPasswordProtection && password.trim() ? password.trim() : null,
       });
 
       setSuccessMessage('Destination URL & link settings updated successfully!');
@@ -515,6 +526,74 @@ export const EditLinkModal: React.FC<EditLinkModalProps> = ({
                       />
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+
+            {/* Password Protection */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowPasswordProtection(!showPasswordProtection)}
+                className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:underline cursor-pointer"
+              >
+                <Lock className="w-3.5 h-3.5 text-slate-400" />
+                <span>
+                  {showPasswordProtection
+                    ? 'Hide Password Settings'
+                    : link.isPasswordProtected || link.password
+                    ? 'Password Protected (Click to edit)'
+                    : 'Protect with Password (optional)'}
+                </span>
+              </button>
+
+              {showPasswordProtection && (
+                <div className="mt-2.5 p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 animate-fade-in">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-slate-300">
+                      <KeyRound className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>Link Password</span>
+                    </div>
+                    {link.isPasswordProtected || link.password ? (
+                      <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full">
+                        Currently Protected
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-slate-400">Optional</span>
+                    )}
+                  </div>
+
+                  <div className="relative">
+                    <input
+                      id="edit-modal-password-input"
+                      type={showPasswordText ? 'text' : 'password'}
+                      placeholder="Enter a secret passcode (or leave blank to remove)"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full pl-3 pr-10 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPasswordText(!showPasswordText)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"
+                      title={showPasswordText ? 'Hide password' : 'Show password'}
+                    >
+                      {showPasswordText ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                    <span>Visitors must enter this passcode to access target destination.</span>
+                    {password && (
+                      <button
+                        type="button"
+                        onClick={() => setPassword('')}
+                        className="text-rose-500 hover:underline cursor-pointer shrink-0 ml-2"
+                      >
+                        Remove password
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

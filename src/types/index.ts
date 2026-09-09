@@ -12,6 +12,8 @@ export interface LinkItem {
   updatedAt: string; // ISO 8601 string
   expiresAt?: string | null; // ISO 8601 string or null if never expires
   countries?: Record<string, number>; // Country code -> click count aggregation
+  password?: string | null; // Optional password to protect link access
+  isPasswordProtected?: boolean; // Convenience flag indicating password protection
 }
 
 export interface ClickEvent {
