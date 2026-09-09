@@ -1,0 +1,15 @@
+<svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="fav-bg-grad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00D2FF" />
+      <stop offset="50%" stop-color="#2563EB" />
+      <stop offset="100%" stop-color="#7C3AED" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Rounded Squircle Badge with Vibrant shortee.xyz Gradient -->
+  <rect width="100" height="100" rx="26" fill="url(#fav-bg-grad)" />
+
+  <!-- Clean Bold Typography 's.' -->
+  <text x="50" y="68" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="60" fill="#ffffff" text-anchor="middle" letter-spacing="-3">s.</text>
+</svg>

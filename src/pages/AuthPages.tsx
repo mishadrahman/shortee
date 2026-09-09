@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Link2,
   Mail,
   Lock,
   User,
@@ -9,6 +8,7 @@ import {
   CheckCircle2,
   Sparkles,
 } from 'lucide-react';
+import { Logo } from '../components/Logo';
 import { useAuth } from '../context/AuthContext';
 import { useAppRouter } from '../lib/router';
 import { createShortLink, claimGuestLinksToAccount } from '../services/linkService';
@@ -160,8 +160,15 @@ export const AuthPages: React.FC<AuthPagesProps> = ({ mode }) => {
       <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl p-6 sm:p-8 animate-scale-in">
         {/* Header */}
         <div className="text-center mb-6">
-          <div className="w-12 h-12 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center mx-auto mb-4 shadow-sm">
-            <Link2 className="w-6 h-6" />
+          <div className="flex items-center justify-center mx-auto mb-4">
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="cursor-pointer focus:outline-none hover:opacity-90 transition-opacity"
+              aria-label="shortee.xyz home"
+            >
+              <Logo size="lg" />
+            </button>
           </div>
           <h1 className="text-2xl font-bold tracking-tight">
             {mode === 'login' && 'Welcome back'}

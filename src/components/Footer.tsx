@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link2 } from 'lucide-react';
+import { Logo } from './Logo';
 import { useAppRouter } from '../lib/router';
 import { useAuth } from '../context/AuthContext';
 
@@ -13,20 +13,17 @@ export const Footer: React.FC = () => {
       className="w-full border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 py-12 px-4 sm:px-6 lg:px-8 text-slate-600 dark:text-slate-400 text-xs transition-colors"
     >
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center">
-            <Link2 className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-bold text-slate-900 dark:text-white text-sm">
-                Shortee
-              </span>
-              <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                shortee.xyz
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500">Fast, reliable link shortening & analytics</p>
+        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-3 text-center sm:text-left">
+          <button
+            onClick={() => navigate('/')}
+            className="cursor-pointer focus:outline-none"
+            aria-label="shortee.xyz home"
+          >
+            <Logo size="sm" />
+          </button>
+          <div className="sm:border-l sm:border-slate-200 sm:dark:border-slate-800 sm:pl-3 sm:py-0.5">
+            <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Fast, reliable link shortening & analytics</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Built for creators, marketers & developers</p>
           </div>
         </div>
 

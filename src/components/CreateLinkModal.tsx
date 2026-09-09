@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Link2,
   Sparkles,
@@ -71,8 +72,13 @@ export const CreateLinkModal: React.FC<CreateLinkModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [createdLink, setCreatedLink] = useState<LinkItem | null>(null);
   const [copied, setCopied] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!isOpen || !mounted || typeof document === 'undefined') return null;
 
   const handleAddTag = (tagToAdd: string) => {
     const cleaned = tagToAdd.trim().replace(/^#/, '').toLowerCase();
@@ -213,7 +219,7 @@ export const CreateLinkModal: React.FC<CreateLinkModalProps> = ({
     setErrorMessage(null);
   };
 
-  return (
+  const modalContent = (
     <div
       id="create-link-modal-backdrop"
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-fade-in"
@@ -717,4 +723,6 @@ export const CreateLinkModal: React.FC<CreateLinkModalProps> = ({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 };

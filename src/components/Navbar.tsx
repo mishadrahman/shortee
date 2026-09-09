@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Link2,
   Moon,
   Sun,
   Plus,
@@ -12,6 +11,7 @@ import {
   Menu,
   X,
 } from 'lucide-react';
+import { Logo } from './Logo';
 import { useAuth } from '../context/AuthContext';
 import { useAppRouter } from '../lib/router';
 import { useTheme } from '../lib/theme';
@@ -50,19 +50,10 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCreateModal }) => {
           <button
             id="brand-logo-btn"
             onClick={() => navigate(currentUser ? '/dashboard' : '/')}
-            className="flex items-center gap-2 sm:gap-2.5 group text-left focus:outline-none cursor-pointer"
+            className="flex items-center group text-left focus:outline-none cursor-pointer"
+            aria-label="shortee.xyz home"
           >
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center transition-transform group-hover:scale-105 shadow-sm shrink-0">
-              <Link2 className="w-4 h-4 sm:w-5 sm:h-5" />
-            </div>
-            <div className="flex items-center gap-1 sm:gap-1.5">
-              <span className="font-extrabold text-sm sm:text-base tracking-tight text-slate-900 dark:text-white">
-                Shortee
-              </span>
-              <span className="px-1 sm:px-1.5 py-0.5 rounded-md text-[9px] sm:text-[10px] font-mono font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                .xyz
-              </span>
-            </div>
+            <Logo size="md" />
           </button>
 
           {/* Desktop Nav - Dashboard view vs Public view */}

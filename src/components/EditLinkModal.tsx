@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Link2,
   Check,
@@ -35,6 +36,7 @@ export const EditLinkModal: React.FC<EditLinkModalProps> = ({
   onClose,
   onLinkUpdated,
 }) => {
+  const [mounted, setMounted] = useState(false);
   const [destinationUrl, setDestinationUrl] = useState('');
   const [title, setTitle] = useState('');
   const [tags, setTags] = useState<string[]>([]);
@@ -59,6 +61,10 @@ export const EditLinkModal: React.FC<EditLinkModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // Sync state whenever modal opens or link changes
   useEffect(() => {
     if (link && isOpen) {
@@ -79,18 +85,30 @@ export const EditLinkModal: React.FC<EditLinkModalProps> = ({
     }
   }, [link, isOpen]);
 
-  // Lock background body scroll when modal is open
+  // Lock background body scroll when modal is open and handle Escape key
   useEffect(() => {
-    if (isOpen) {
-      const originalOverflow = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = originalOverflow;
-      };
-    }
-  }, [isOpen]);
+    if (!isOpen) return;
 
-  if (!isOpen || !link) return null;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
+  if (!isOpen || !link || !mounted || typeof document === 'undefined') {
+    return null;
+  }
 
   const handleAddTag = (tagToAdd: string) => {
     const cleaned = tagToAdd.trim().replace(/^#/, '').toLowerCase();
@@ -176,7 +194,7 @@ export const EditLinkModal: React.FC<EditLinkModalProps> = ({
 
       setTimeout(() => {
         onClose();
-      }, 900);
+      }, 700);
     } catch (err: any) {
       console.error('Update link error:', err);
       setErrorMessage(err?.message || 'Failed to update link. Please try again.');
@@ -187,28 +205,30 @@ export const EditLinkModal: React.FC<EditLinkModalProps> = ({
 
   const shortUrl = buildShortUrl(link.shortCode);
 
-  return (
+  const modalContent = (
     <div
       id="edit-link-modal-backdrop"
-      className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-xs p-3 sm:p-4 flex min-h-full items-center justify-center animate-fade-in"
-      onClick={onClose}
+      className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs overflow-y-auto animate-fade-in"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div
         id="edit-link-modal-dialog"
-        className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh] my-auto text-left"
+        className="relative w-full max-w-lg max-h-[90vh] sm:max-h-[85vh] flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl text-slate-900 dark:text-slate-100 my-auto overflow-hidden animate-scale-in text-left"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal Header (Sticky) */}
-        <div className="px-5 sm:px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0 bg-white dark:bg-slate-900 z-10">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-950 flex items-center justify-center shrink-0">
-              <Link2 className="w-4 h-4" />
+        {/* Header - Fixed Top */}
+        <div className="flex items-center justify-between p-5 sm:p-6 pb-4 border-b border-slate-100 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-900 z-10">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white flex items-center justify-center shrink-0">
+              <Link2 className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-tight">
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-tight">
                 Edit Destination URL
               </h2>
-              <p className="text-[11px] text-slate-500">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 Update target destination without changing your short link
               </p>
             </div>
@@ -217,308 +237,311 @@ export const EditLinkModal: React.FC<EditLinkModalProps> = ({
             id="close-edit-modal-btn"
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+            className="p-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             title="Close"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Scrollable Modal Form Body */}
+        {/* Form Container with distinct scrollable area and pinned footer */}
         <form
           id="edit-link-form"
           onSubmit={handleSubmit}
-          className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-4 sm:space-y-5 focus:outline-none overscroll-contain"
+          className="flex flex-col flex-1 min-h-0 overflow-hidden"
         >
-          {/* Permanent Short URL Badge */}
-          <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
-            <div className="min-w-0 pr-2">
-              <span className="text-slate-500 font-medium block text-[10px] uppercase tracking-wider">
-                Permanent Short Link
+          {/* Scrollable Form Body */}
+          <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4 sm:space-y-5 overscroll-contain focus:outline-none">
+            {/* Permanent Short URL Badge */}
+            <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+              <div className="min-w-0 pr-2">
+                <span className="text-slate-500 font-medium block text-[10px] uppercase tracking-wider">
+                  Permanent Short Link
+                </span>
+                <span className="font-mono font-bold text-slate-900 dark:text-slate-100 truncate block">
+                  {shortUrl}
+                </span>
+              </div>
+              <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full shrink-0">
+                QR Code stays active
               </span>
-              <span className="font-mono font-bold text-slate-900 dark:text-slate-100 truncate block">
-                {shortUrl}
-              </span>
-            </div>
-            <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full shrink-0">
-              QR Code stays active
-            </span>
-          </div>
-
-          {/* Destination URL Field */}
-          <div>
-            <label
-              htmlFor="edit-modal-destination-url"
-              className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5"
-            >
-              Destination URL <span className="text-rose-500">*</span>
-            </label>
-            <input
-              id="edit-modal-destination-url"
-              type="text"
-              required
-              value={destinationUrl}
-              onChange={(e) => {
-                setDestinationUrl(e.target.value);
-                if (errorMessage) setErrorMessage(null);
-              }}
-              placeholder="https://example.com/your-new-destination-page"
-              className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-white font-mono"
-            />
-            <div className="flex flex-wrap items-center justify-between gap-1 mt-1.5 text-[11px] text-slate-400">
-              <span>Visitors clicking your short link will redirect here</span>
-              <button
-                type="button"
-                onClick={() => setShowUtmBuilder(!showUtmBuilder)}
-                className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold cursor-pointer"
-              >
-                {showUtmBuilder ? 'Hide UTM Builder' : '+ Add UTM Parameters'}
-              </button>
-            </div>
-          </div>
-
-          {/* UTM Builder Expansion */}
-          {showUtmBuilder && (
-            <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 text-xs animate-fade-in">
-              <div className="font-semibold text-slate-800 dark:text-slate-200 flex items-center justify-between">
-                <span>UTM Campaign Parameters</span>
-                <span className="text-[10px] text-slate-400 font-normal">Optional</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div>
-                  <label className="text-[11px] text-slate-500 block mb-1">Source (e.g. facebook)</label>
-                  <input
-                    type="text"
-                    value={utm.source}
-                    onChange={(e) => setUtm({ ...utm, source: e.target.value })}
-                    placeholder="facebook"
-                    className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] text-slate-500 block mb-1">Medium (e.g. cpc, bio)</label>
-                  <input
-                    type="text"
-                    value={utm.medium}
-                    onChange={(e) => setUtm({ ...utm, medium: e.target.value })}
-                    placeholder="social"
-                    className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] text-slate-500 block mb-1">Campaign Name</label>
-                  <input
-                    type="text"
-                    value={utm.campaign}
-                    onChange={(e) => setUtm({ ...utm, campaign: e.target.value })}
-                    placeholder="spring_sale"
-                    className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] text-slate-500 block mb-1">Content / Variant</label>
-                  <input
-                    type="text"
-                    value={utm.content}
-                    onChange={(e) => setUtm({ ...utm, content: e.target.value })}
-                    placeholder="banner_top"
-                    className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono"
-                  />
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={handleApplyUtm}
-                className="w-full py-2 bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-lg font-semibold text-xs cursor-pointer hover:opacity-90 transition-opacity"
-              >
-                Apply UTM to Destination URL
-              </button>
-            </div>
-          )}
-
-          {/* Title Field */}
-          <div>
-            <label
-              htmlFor="edit-modal-title"
-              className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5"
-            >
-              Link Title / Note
-            </label>
-            <input
-              id="edit-modal-title"
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Summer Promo Landing Page"
-              className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-white"
-            />
-          </div>
-
-          {/* Tags */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-              Tags & Labels
-            </label>
-            <div className="flex gap-2">
-              <input
-                id="edit-modal-tag-input"
-                type="text"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddTag(tagInput);
-                  }
-                }}
-                placeholder="Add a tag..."
-                className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-white"
-              />
-              <button
-                type="button"
-                onClick={() => handleAddTag(tagInput)}
-                className="px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
-              >
-                Add
-              </button>
             </div>
 
-            {/* Quick tag suggestions */}
-            <div className="flex flex-wrap items-center gap-1.5 mt-2">
-              <span className="text-[10px] text-slate-400">Suggestions:</span>
-              {QUICK_TAG_SUGGESTIONS.map((tag) => (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => handleAddTag(tag)}
-                  className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-colors cursor-pointer"
-                >
-                  +{tag}
-                </button>
-              ))}
-            </div>
-
-            {tags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2.5">
-                {tags.map((t) => (
-                  <span
-                    key={t}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200/60 dark:border-indigo-800/60 text-indigo-700 dark:text-indigo-300 text-xs font-medium"
-                  >
-                    #{t}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveTag(t)}
-                      className="text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-200 ml-0.5 cursor-pointer"
-                    >
-                      &times;
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Link Status Toggle */}
-          <div className="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800">
+            {/* Destination URL Field */}
             <div>
-              <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 block">
-                Link Status
-              </span>
-              <span className="text-[11px] text-slate-500">
-                {isActive ? 'Active (visitors redirect normally)' : 'Paused (visitors see paused notification)'}
-              </span>
-            </div>
-            <button
-              id="edit-modal-status-toggle"
-              type="button"
-              onClick={() => setIsActive(!isActive)}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                isActive ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'
-              }`}
-            >
-              <span
-                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                  isActive ? 'translate-x-5' : 'translate-x-0'
-                }`}
+              <label
+                htmlFor="edit-modal-destination-url"
+                className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5"
+              >
+                Destination URL <span className="text-rose-500">*</span>
+              </label>
+              <input
+                id="edit-modal-destination-url"
+                type="text"
+                required
+                value={destinationUrl}
+                onChange={(e) => {
+                  setDestinationUrl(e.target.value);
+                  if (errorMessage) setErrorMessage(null);
+                }}
+                placeholder="https://example.com/your-new-destination-page"
+                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-white font-mono"
               />
-            </button>
-          </div>
+              <div className="flex flex-wrap items-center justify-between gap-1 mt-1.5 text-[11px] text-slate-400">
+                <span>Visitors clicking your short link will redirect here</span>
+                <button
+                  type="button"
+                  onClick={() => setShowUtmBuilder(!showUtmBuilder)}
+                  className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold cursor-pointer"
+                >
+                  {showUtmBuilder ? 'Hide UTM Builder' : '+ Add UTM Parameters'}
+                </button>
+              </div>
+            </div>
 
-          {/* Expiration Settings */}
-          <div>
-            <button
-              type="button"
-              onClick={() => setShowExpiration(!showExpiration)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:underline cursor-pointer"
-            >
-              <Calendar className="w-3.5 h-3.5 text-slate-400" />
-              <span>{showExpiration ? 'Hide Expiration Settings' : 'Modify Expiration Date'}</span>
-            </button>
-
-            {showExpiration && (
-              <div className="mt-2.5 p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 animate-fade-in">
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { id: 'keep', label: 'Keep Current' },
-                    { id: 'never', label: 'Never Expire' },
-                    { id: '24h', label: 'In 24 Hours' },
-                    { id: '7d', label: 'In 7 Days' },
-                    { id: '30d', label: 'In 30 Days' },
-                    { id: 'custom', label: 'Custom Date' },
-                  ].map((preset) => (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      onClick={() => setExpiryPreset(preset.id as ExpiryPreset)}
-                      className={`px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer text-center truncate ${
-                        expiryPreset === preset.id
-                          ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 shadow-xs'
-                          : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750'
-                      }`}
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
+            {/* UTM Builder Expansion */}
+            {showUtmBuilder && (
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 text-xs animate-fade-in">
+                <div className="font-semibold text-slate-800 dark:text-slate-200 flex items-center justify-between">
+                  <span>UTM Campaign Parameters</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Optional</span>
                 </div>
-
-                {expiryPreset === 'custom' && (
-                  <div className="animate-fade-in pt-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="text-[11px] text-slate-500 block mb-1">Source (e.g. facebook)</label>
                     <input
-                      type="datetime-local"
-                      value={customExpiryDate}
-                      min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
-                      onChange={(e) => setCustomExpiryDate(e.target.value)}
-                      className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono"
+                      type="text"
+                      value={utm.source}
+                      onChange={(e) => setUtm({ ...utm, source: e.target.value })}
+                      placeholder="facebook"
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono"
                     />
                   </div>
-                )}
+                  <div>
+                    <label className="text-[11px] text-slate-500 block mb-1">Medium (e.g. cpc, bio)</label>
+                    <input
+                      type="text"
+                      value={utm.medium}
+                      onChange={(e) => setUtm({ ...utm, medium: e.target.value })}
+                      placeholder="social"
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-slate-500 block mb-1">Campaign Name</label>
+                    <input
+                      type="text"
+                      value={utm.campaign}
+                      onChange={(e) => setUtm({ ...utm, campaign: e.target.value })}
+                      placeholder="spring_sale"
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-slate-500 block mb-1">Content / Variant</label>
+                    <input
+                      type="text"
+                      value={utm.content}
+                      onChange={(e) => setUtm({ ...utm, content: e.target.value })}
+                      placeholder="banner_top"
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono"
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleApplyUtm}
+                  className="w-full py-2 bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-lg font-semibold text-xs cursor-pointer hover:opacity-90 transition-opacity"
+                >
+                  Apply UTM to Destination URL
+                </button>
+              </div>
+            )}
+
+            {/* Title Field */}
+            <div>
+              <label
+                htmlFor="edit-modal-title"
+                className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5"
+              >
+                Link Title / Note
+              </label>
+              <input
+                id="edit-modal-title"
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Summer Promo Landing Page"
+                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-white"
+              />
+            </div>
+
+            {/* Tags */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                Tags & Labels
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="edit-modal-tag-input"
+                  type="text"
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddTag(tagInput);
+                    }
+                  }}
+                  placeholder="Add a tag..."
+                  className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleAddTag(tagInput)}
+                  className="px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  Add
+                </button>
+              </div>
+
+              {/* Quick tag suggestions */}
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                <span className="text-[10px] text-slate-400">Suggestions:</span>
+                {QUICK_TAG_SUGGESTIONS.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => handleAddTag(tag)}
+                    className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-colors cursor-pointer"
+                  >
+                    +{tag}
+                  </button>
+                ))}
+              </div>
+
+              {tags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2.5">
+                  {tags.map((t) => (
+                    <span
+                      key={t}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200/60 dark:border-indigo-800/60 text-indigo-700 dark:text-indigo-300 text-xs font-medium"
+                    >
+                      #{t}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTag(t)}
+                        className="text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-200 ml-0.5 cursor-pointer"
+                      >
+                        &times;
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Link Status Toggle */}
+            <div className="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800">
+              <div>
+                <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 block">
+                  Link Status
+                </span>
+                <span className="text-[11px] text-slate-500">
+                  {isActive ? 'Active (visitors redirect normally)' : 'Paused (visitors see paused notification)'}
+                </span>
+              </div>
+              <button
+                id="edit-modal-status-toggle"
+                type="button"
+                onClick={() => setIsActive(!isActive)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  isActive ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
+                    isActive ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Expiration Settings */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowExpiration(!showExpiration)}
+                className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:underline cursor-pointer"
+              >
+                <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                <span>{showExpiration ? 'Hide Expiration Settings' : 'Modify Expiration Date'}</span>
+              </button>
+
+              {showExpiration && (
+                <div className="mt-2.5 p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 animate-fade-in">
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { id: 'keep', label: 'Keep Current' },
+                      { id: 'never', label: 'Never Expire' },
+                      { id: '24h', label: 'In 24 Hours' },
+                      { id: '7d', label: 'In 7 Days' },
+                      { id: '30d', label: 'In 30 Days' },
+                      { id: 'custom', label: 'Custom Date' },
+                    ].map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => setExpiryPreset(preset.id as ExpiryPreset)}
+                        className={`px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer text-center truncate ${
+                          expiryPreset === preset.id
+                            ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 shadow-xs'
+                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {expiryPreset === 'custom' && (
+                    <div className="animate-fade-in pt-1">
+                      <input
+                        type="datetime-local"
+                        value={customExpiryDate}
+                        min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                        onChange={(e) => setCustomExpiryDate(e.target.value)}
+                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Feedback banners */}
+            {errorMessage && (
+              <div className="p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 rounded-xl flex items-center gap-2 text-xs text-rose-700 dark:text-rose-300 animate-fade-in">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            {successMessage && (
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-900 rounded-xl flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-300 animate-fade-in">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>{successMessage}</span>
               </div>
             )}
           </div>
 
-          {/* Feedback banners */}
-          {errorMessage && (
-            <div className="p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 rounded-xl flex items-center gap-2 text-xs text-rose-700 dark:text-rose-300 animate-fade-in">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{errorMessage}</span>
-            </div>
-          )}
-
-          {successMessage && (
-            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-900 rounded-xl flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-300 animate-fade-in">
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>{successMessage}</span>
-            </div>
-          )}
-
-          {/* Modal Sticky Footer Actions */}
-          <div className="sticky bottom-0 -mx-5 sm:-mx-6 -mb-5 mt-4 px-5 sm:px-6 py-3.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2.5 shrink-0 z-10">
+          {/* Modal Sticky Footer Actions - Pinned outside the scrollable body */}
+          <div className="p-4 sm:px-6 border-t border-slate-100 dark:border-slate-800 shrink-0 bg-slate-50/90 dark:bg-slate-900/90 backdrop-blur-xs flex items-center justify-end gap-3 z-10">
             <button
               id="edit-modal-cancel-btn"
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
             >
               Cancel
             </button>
@@ -527,7 +550,7 @@ export const EditLinkModal: React.FC<EditLinkModalProps> = ({
               id="edit-modal-submit-btn"
               type="submit"
               disabled={loading}
-              className="inline-flex items-center gap-2 px-5 py-2 text-xs font-semibold text-white bg-slate-900 dark:bg-white dark:text-slate-950 hover:bg-slate-800 dark:hover:bg-slate-100 rounded-xl shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold text-white bg-slate-900 dark:bg-white dark:text-slate-950 hover:bg-slate-800 dark:hover:bg-slate-100 shadow-sm transition-all disabled:opacity-50 cursor-pointer"
             >
               <Save className="w-3.5 h-3.5" />
               <span>{loading ? 'Saving...' : 'Save & Update URL'}</span>
@@ -537,4 +560,6 @@ export const EditLinkModal: React.FC<EditLinkModalProps> = ({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 };

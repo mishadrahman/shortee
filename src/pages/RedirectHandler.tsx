@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { ExternalLink, Link2, AlertCircle, Home, ClockAlert } from 'lucide-react';
+import { Logo } from '../components/Logo';
 import { getLinkByShortCode, processLinkClick } from '../services/linkService';
 import { LinkItem } from '../types';
 import { useAppRouter } from '../lib/router';
@@ -233,11 +234,11 @@ export const RedirectHandler: React.FC<RedirectHandlerProps> = ({ shortCode }) =
       <div className="fixed top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-500 animate-pulse" />
 
       <div className="w-full max-w-sm text-center">
-        <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 flex items-center justify-center mx-auto mb-3 shadow-xs">
-          <Link2 className="w-5 h-5 animate-pulse" />
+        <div className="flex items-center justify-center mx-auto mb-3">
+          <Logo size="lg" />
         </div>
 
-        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-2 animate-pulse">
           Redirecting to destination...
         </p>
 

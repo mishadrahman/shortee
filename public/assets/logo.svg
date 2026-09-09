@@ -1,0 +1,21 @@
+<svg viewBox="0 0 240 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .brand-text { fill: #0f172a; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 900; font-size: 36px; letter-spacing: -1px; }
+    .tld-text { fill: url(#tld-gradient); font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 900; font-size: 36px; letter-spacing: -1px; }
+    @media (prefers-color-scheme: dark) {
+      .brand-text { fill: #ffffff; }
+    }
+  </style>
+
+  <defs>
+    <linearGradient id="tld-gradient" x1="140" y1="20" x2="230" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00D2FF" />
+      <stop offset="45%" stop-color="#2563EB" />
+      <stop offset="100%" stop-color="#8B5CF6" />
+    </linearGradient>
+  </defs>
+
+  <!-- Clean Wordmark without symbol, 100% transparent background -->
+  <text x="5" y="44" class="brand-text">shortee</text>
+  <text x="142" y="44" class="tld-text">.xyz</text>
+</svg>

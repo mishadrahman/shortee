@@ -1,4 +1,5 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { QRCodeCanvas } from 'qrcode.react';
 import { X, Download, Copy, Check, ExternalLink, QrCode } from 'lucide-react';
 import { buildShortUrl } from '../lib/urlUtils';
@@ -15,7 +16,13 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({ link, onClose }) => {
   const [fgColor, setFgColor] = useState<string>('#0f172a');
   const canvasRef = useRef<HTMLDivElement>(null);
 
-  if (!link) return null;
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!link || !mounted || typeof document === 'undefined') return null;
 
   const fullShortUrl = buildShortUrl(link.shortCode);
 
@@ -45,7 +52,7 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({ link, onClose }) => {
     document.body.removeChild(downloadAnchor);
   };
 
-  return (
+  const modalContent = (
     <div
       id="qr-code-modal-backdrop"
       className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs transition-opacity animate-fade-in"
@@ -182,4 +189,6 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({ link, onClose }) => {
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 };

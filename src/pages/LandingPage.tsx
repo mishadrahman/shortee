@@ -21,6 +21,7 @@ import {
   Lock,
   Edit3,
 } from 'lucide-react';
+import { Logo } from '../components/Logo';
 import { useAuth } from '../context/AuthContext';
 import { useAppRouter } from '../lib/router';
 import { validateLongUrl, validateCustomAlias, buildShortUrl } from '../lib/urlUtils';
@@ -690,7 +691,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenQr }) => {
               className="p-7 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col justify-between shadow-xs transition-all duration-200 hover:-translate-y-1 hover:shadow-md"
             >
               <div>
-                <div className="w-12 h-12 rounded-xl bg-slate-200/80 dark:bg-slate-800 flex items-center justify-center text-slate-900 dark:text-slate-100 mb-5">
+                <div className="w-12 h-12 rounded-xl bg-slate-200/80 dark:bg-slate-800 flex items-center justify-center text-slate-900 dark:text-slate-100 mb-5 shadow-xs">
                   <Link2 className="w-6 h-6" />
                 </div>
                 <h3 className="font-semibold text-lg text-slate-900 dark:text-white">
