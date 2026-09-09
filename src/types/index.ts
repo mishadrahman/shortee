@@ -14,6 +14,10 @@ export interface LinkItem {
   countries?: Record<string, number>; // Country code -> click count aggregation
   password?: string | null; // Optional password to protect link access
   isPasswordProtected?: boolean; // Convenience flag indicating password protection
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImage?: string;
+  ogSiteName?: string;
 }
 
 export interface ClickEvent {

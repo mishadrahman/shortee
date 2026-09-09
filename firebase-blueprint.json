@@ -29,6 +29,12 @@
         "isActive": { "type": "boolean", "description": "Whether the short link redirection is active or paused" },
         "expiresAt": { "type": "string", "description": "Optional ISO timestamp when link expires" },
         "tags": { "type": "array", "description": "Custom organizational tags" },
+        "password": { "type": "string", "description": "Optional access password" },
+        "isPasswordProtected": { "type": "boolean", "description": "Whether link requires password" },
+        "ogTitle": { "type": "string", "description": "Destination website OpenGraph title" },
+        "ogDescription": { "type": "string", "description": "Destination website OpenGraph description" },
+        "ogImage": { "type": "string", "description": "Destination website OpenGraph preview image URL" },
+        "ogSiteName": { "type": "string", "description": "Destination website brand/site name" },
         "createdAt": { "type": "string", "description": "ISO timestamp when shortened" },
         "updatedAt": { "type": "string", "description": "ISO timestamp of last click or modification" }
       },

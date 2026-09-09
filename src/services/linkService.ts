@@ -235,6 +235,10 @@ export async function createShortLink({
   expiresAt,
   tags,
   password,
+  ogTitle,
+  ogDescription,
+  ogImage,
+  ogSiteName,
 }: {
   userId?: string;
   originalUrl: string;
@@ -243,6 +247,10 @@ export async function createShortLink({
   expiresAt?: string | null;
   tags?: string[];
   password?: string | null;
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImage?: string;
+  ogSiteName?: string;
 }): Promise<LinkItem> {
   const urlCheck = validateLongUrl(originalUrl);
   if (!urlCheck.valid) {
@@ -264,7 +272,7 @@ export async function createShortLink({
   const shortCode = await generateUniqueShortCode(customAlias);
 
   // Derive a fallback title from the URL if none provided
-  let computedTitle = title?.trim();
+  let computedTitle = title?.trim() || ogTitle?.trim();
   if (!computedTitle) {
     try {
       const parsed = new URL(cleanUrl);
@@ -294,6 +302,10 @@ export async function createShortLink({
     expiresAt: expiresAt || null,
     password: cleanPassword,
     isPasswordProtected: Boolean(cleanPassword),
+    ogTitle: ogTitle?.trim() || undefined,
+    ogDescription: ogDescription?.trim() || undefined,
+    ogImage: ogImage?.trim() || undefined,
+    ogSiteName: ogSiteName?.trim() || undefined,
   };
 
   // Always save locally first so user gets instant responsive UI
@@ -372,6 +384,10 @@ export async function getUserLinks(userId: string): Promise<LinkItem[]> {
         expiresAt: data.expiresAt || null,
         password: data.password || null,
         isPasswordProtected: Boolean(data.password && data.password.trim()),
+        ogTitle: data.ogTitle || undefined,
+        ogDescription: data.ogDescription || undefined,
+        ogImage: data.ogImage || undefined,
+        ogSiteName: data.ogSiteName || undefined,
       });
     });
 
@@ -430,6 +446,10 @@ export async function getLinkByShortCode(shortCode: string): Promise<LinkItem | 
         expiresAt: data.expiresAt || null,
         password: data.password || null,
         isPasswordProtected: Boolean(data.password && data.password.trim()),
+        ogTitle: data.ogTitle || undefined,
+        ogDescription: data.ogDescription || undefined,
+        ogImage: data.ogImage || undefined,
+        ogSiteName: data.ogSiteName || undefined,
       };
       upsertLocalLink(item);
       return item;
@@ -465,6 +485,10 @@ export async function getLinkByShortCode(shortCode: string): Promise<LinkItem | 
         expiresAt: data.expiresAt || null,
         password: data.password || null,
         isPasswordProtected: Boolean(data.password && data.password.trim()),
+        ogTitle: data.ogTitle || undefined,
+        ogDescription: data.ogDescription || undefined,
+        ogImage: data.ogImage || undefined,
+        ogSiteName: data.ogSiteName || undefined,
       };
       upsertLocalLink(item);
       return item;
@@ -517,6 +541,10 @@ export async function getLinkById(linkId: string): Promise<LinkItem | null> {
           countries: data.countries || {},
           password: data.password || null,
           isPasswordProtected: Boolean(data.password && data.password.trim()),
+          ogTitle: data.ogTitle || undefined,
+          ogDescription: data.ogDescription || undefined,
+          ogImage: data.ogImage || undefined,
+          ogSiteName: data.ogSiteName || undefined,
         };
         upsertLocalLink(item);
         return item;
@@ -553,6 +581,10 @@ export async function getLinkById(linkId: string): Promise<LinkItem | null> {
           countries: data.countries || {},
           password: data.password || null,
           isPasswordProtected: Boolean(data.password && data.password.trim()),
+          ogTitle: data.ogTitle || undefined,
+          ogDescription: data.ogDescription || undefined,
+          ogImage: data.ogImage || undefined,
+          ogSiteName: data.ogSiteName || undefined,
         };
         upsertLocalLink(item);
         return item;
@@ -778,6 +810,10 @@ export function subscribeToLink(
             expiresAt: data.expiresAt || null,
             password: data.password || null,
             isPasswordProtected: Boolean(data.password && data.password.trim()),
+            ogTitle: data.ogTitle || undefined,
+            ogDescription: data.ogDescription || undefined,
+            ogImage: data.ogImage || undefined,
+            ogSiteName: data.ogSiteName || undefined,
           };
           upsertLocalLink(item);
           onUpdate(item);
@@ -983,6 +1019,10 @@ export async function updateShortLink(
     expiresAt?: string | null;
     isActive?: boolean;
     password?: string | null;
+    ogTitle?: string;
+    ogDescription?: string;
+    ogImage?: string;
+    ogSiteName?: string;
   }
 ): Promise<LinkItem | null> {
   const now = new Date().toISOString();
