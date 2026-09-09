@@ -25,6 +25,7 @@
         "title": { "type": "string", "description": "Optional human-readable title" },
         "clicks": { "type": "number", "description": "All-time visit count" },
         "uniqueVisitors": { "type": "number", "description": "Estimated unique visitor count" },
+        "countries": { "type": "object", "description": "Aggregated visitor counts by country" },
         "isActive": { "type": "boolean", "description": "Whether the short link redirection is active or paused" },
         "expiresAt": { "type": "string", "description": "Optional ISO timestamp when link expires" },
         "tags": { "type": "array", "description": "Custom organizational tags" },
@@ -46,7 +47,13 @@
         "timestamp": { "type": "string", "description": "ISO timestamp of redirection event" },
         "referrer": { "type": "string", "description": "HTTP document referrer domain or Direct" },
         "deviceType": { "type": "string", "enum": ["Desktop", "Mobile", "Tablet"], "description": "Device category" },
-        "browser": { "type": "string", "description": "Client browser category" }
+        "browser": { "type": "string", "description": "Client browser category" },
+        "operatingSystem": { "type": "string", "description": "Operating system name" },
+        "country": { "type": "string", "description": "Country name of visitor" },
+        "countryCode": { "type": "string", "description": "2-letter country code of visitor" },
+        "city": { "type": "string", "description": "City name of visitor" },
+        "isUnique": { "type": "boolean", "description": "Whether this visit is a deduplicated unique visit" },
+        "visitorId": { "type": "string", "description": "Anonymous client visitor ID" }
       },
       "required": ["linkId", "shortCode", "timestamp"]
     }

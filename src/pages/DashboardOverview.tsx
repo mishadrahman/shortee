@@ -46,7 +46,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   onOpenCreateModal,
   onOpenQrModal,
 }) => {
-  const { currentUser, userProfile } = useAuth();
+  const { currentUser, userProfile, loading: authLoading } = useAuth();
   const { navigate } = useAppRouter();
 
   const [links, setLinks] = useState<LinkItem[]>(() => {
@@ -79,8 +79,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       setLinks(data);
       setClickEvents(events);
     } catch (err: any) {
-      console.error('Failed to load links:', err);
-      setError('Unable to load your dashboard links. Please try again.');
+      console.warn('Dashboard fetch notice:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -88,7 +87,11 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   };
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (authLoading) return;
+    if (!currentUser) {
+      setLoading(false);
+      return;
+    }
 
     // 1. Initial fresh fetch
     fetchLinks(false);
@@ -307,11 +310,21 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           )}
         </div>
 
-        {/* Loading State */}
-        {loading && (
-          <div className="p-12 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
-            <div className="w-6 h-6 border-2 border-slate-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            <p className="text-xs text-slate-500">Loading your shortened links...</p>
+        {/* Loading Skeleton State */}
+        {loading && links.length === 0 && (
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm p-4 divide-y divide-slate-100 dark:divide-slate-800 animate-pulse">
+            {[1, 2, 3].map((n) => (
+              <div key={n} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-2 flex-1">
+                  <div className="h-4 w-48 bg-slate-200 dark:bg-slate-800 rounded-md" />
+                  <div className="h-3 w-64 bg-slate-100 dark:bg-slate-800/60 rounded-md" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-20 bg-slate-200 dark:bg-slate-800 rounded-lg" />
+                  <div className="h-8 w-20 bg-slate-200 dark:bg-slate-800 rounded-lg" />
+                </div>
+              </div>
+            ))}
           </div>
         )}
 

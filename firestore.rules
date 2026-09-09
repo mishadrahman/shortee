@@ -26,24 +26,31 @@ service cloud.firestore {
       allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
 
       // UPDATE GATES:
-      // Gate A: Authenticated link owner can edit title, tags, pause/activate, or change expiry
-      // Gate B: Claiming an unclaimed guest link upon login/signup
-      // Gate C: Public visitor click tracking on redirect (strictly restricted keys)
+      // Gate A: Authenticated link owner can edit original destination URL, title, tags, pause/activate, or expiry
+      // Gate B: Authenticated user claiming ownership and/or editing an unclaimed guest link
+      // Gate C: Guest creator editing guest link destination/settings without altering shortCode or ownership
+      // Gate D: Public visitor click tracking on redirect (strictly restricted to analytics keys)
       allow update: if (
         // Gate A: Owner updating their own link (cannot transfer ownership)
         (request.auth != null && resource.data.userId == request.auth.uid
           && request.resource.data.userId == resource.data.userId)
         ||
-        // Gate B: Claiming guest link upon account creation/login
+        // Gate B: Authenticated user claiming ownership and/or updating an unclaimed guest link
         (request.auth != null && resource.data.userId == 'guest'
-          && request.resource.data.userId == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userId', 'updatedAt']))
+          && (request.resource.data.userId == request.auth.uid || request.resource.data.userId == 'guest'))
         ||
-        // Gate C: Anonymous visitor tracking clicks on short link redirect.
-        // HARDENED SECURITY: Only clicks, uniqueVisitors, updatedAt, and shortCodeLower can be touched!
+        // Gate C: Guest creator updating a guest link (maintains guest ownership & shortCode integrity)
+        (resource.data.userId == 'guest'
+          && request.resource.data.userId == 'guest'
+          && request.resource.data.shortCode == resource.data.shortCode
+          && request.resource.data.originalUrl is string
+          && request.resource.data.originalUrl.size() <= 2048)
+        ||
+        // Gate D: Anonymous visitor tracking clicks on short link redirect.
+        // HARDENED SECURITY: Only clicks, uniqueVisitors, countries, updatedAt, and shortCodeLower can be touched!
         // Critical settings (isActive, expiresAt, originalUrl, shortCode, userId, title, tags) CANNOT BE MODIFIED!
         (
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clicks', 'uniqueVisitors', 'updatedAt', 'shortCodeLower'])
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clicks', 'uniqueVisitors', 'countries', 'updatedAt', 'shortCodeLower'])
           && request.resource.data.clicks is number
         )
       );

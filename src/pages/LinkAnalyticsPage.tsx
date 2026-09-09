@@ -52,6 +52,7 @@ import {
 import { LinkItem, ClickEvent } from '../types';
 import { buildShortUrl, getCountryFlagEmoji, getCountryNameFromCode } from '../lib/urlUtils';
 import { EditLinkModal } from '../components/EditLinkModal';
+import { AnalyticsSkeleton } from '../components/AnalyticsSkeleton';
 
 interface LinkAnalyticsPageProps {
   linkId: string;
@@ -65,7 +66,7 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
   onOpenQrModal,
 }) => {
   const { navigate } = useAppRouter();
-  const { currentUser } = useAuth();
+  const { currentUser, loading: authLoading } = useAuth();
 
   const [link, setLink] = useState<LinkItem | null>(() => {
     if (typeof window !== 'undefined') {
@@ -93,6 +94,7 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
   // Security gate helper
   const verifyAccessPermission = (target: LinkItem | null): boolean => {
     if (!target) return false;
+    if (authLoading) return true; // Defer hard rejection until auth state settles
     if (currentUser) {
       if (target.userId && target.userId !== 'guest' && target.userId !== currentUser.uid) {
         return false;
@@ -101,7 +103,7 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
     }
     // Guest visitor: only allowed if link was created locally in this browser or is an unclaimed guest link
     const isGuestOwner = getGuestLinks().some((g) => g.id === target.id);
-    if (!isGuestOwner && target.userId !== 'guest') {
+    if (!isGuestOwner && target.userId && target.userId !== 'guest') {
       return false;
     }
     return true;
@@ -113,12 +115,13 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
       if (showLoadingState) setRefreshing(true);
       const linkData = await getLinkById(linkId);
       if (!linkData) {
-        setError('Shortened link not found or has expired.');
-        setLink(null);
+        if (!link) {
+          setError('Shortened link not found or has expired.');
+        }
         return;
       }
 
-      if (!verifyAccessPermission(linkData)) {
+      if (!authLoading && !verifyAccessPermission(linkData)) {
         setError('Access Denied: You do not have permission to view or manage analytics for this link.');
         setLink(null);
         return;
@@ -130,8 +133,10 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
       const events = await getLinkClickEvents(linkData.id, linkData.userId);
       setClickEvents(events);
     } catch (err: any) {
-      console.error('Error fetching analytics:', err);
-      setError('Failed to load link analytics. Please try again.');
+      console.warn('Analytics fetch notice:', err);
+      if (!link) {
+        setError('Failed to load link analytics. Please try again.');
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -139,12 +144,14 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
   };
 
   useEffect(() => {
+    if (authLoading) return; // Wait for initial auth initialization
+
     loadData(false);
 
     let unsubLink = () => {};
     let unsubEvents = () => {};
 
-    // Authoritative lookup and real-time subscription
+    // Real-time authoritative subscription
     getLinkById(linkId).then((resolvedLink) => {
       if (resolvedLink) {
         if (!verifyAccessPermission(resolvedLink)) {
@@ -155,6 +162,7 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
 
         setLink(resolvedLink);
         setError(null);
+        setLoading(false);
 
         unsubLink = subscribeToLink(resolvedLink.id, (fresh) => {
           if (fresh) {
@@ -175,6 +183,8 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
           undefined,
           resolvedLink.userId
         );
+      } else if (!link) {
+        setLoading(false);
       }
     });
 
@@ -193,7 +203,7 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
       window.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('focus', handleVisibility);
     };
-  }, [linkId, currentUser?.uid]);
+  }, [linkId, currentUser?.uid, authLoading]);
 
   const handleCopy = async () => {
     if (!link) return;
@@ -355,15 +365,8 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
 
   const sortedCountries = Object.entries(countryCounts).sort((a, b) => b[1].count - a[1].count);
 
-  if (loading) {
-    return (
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 text-center">
-        <div className="w-10 h-10 border-3 border-slate-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-        <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
-          Loading professional analytics...
-        </p>
-      </div>
-    );
+  if (loading && !link) {
+    return <AnalyticsSkeleton />;
   }
 
   if (error || !link) {
@@ -1037,6 +1040,7 @@ export const LinkAnalyticsPage: React.FC<LinkAnalyticsPageProps> = ({
           onClose={() => setIsEditingModalOpen(false)}
           onLinkUpdated={(updated) => {
             setLink(updated);
+            loadData(false);
           }}
         />
       )}

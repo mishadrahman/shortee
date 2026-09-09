@@ -472,77 +472,91 @@ export async function getLinkByShortCode(shortCode: string): Promise<LinkItem | 
 
 /**
  * Look up a link document by its Firestore doc id (or shortCode)
- * Authoritative Firestore query first so analytics and clicks are always 100% accurate.
+ * Fast local cache check + sub-2s authoritative Firestore query with non-blocking fallback
  */
 export async function getLinkById(linkId: string): Promise<LinkItem | null> {
   const trimmedId = linkId.trim();
+  const localMatch = getLocalLinks().find((l) => l.id === trimmedId || l.shortCode === trimmedId) || null;
 
-  // 1. Fetch directly from Firestore by Document ID
-  try {
-    const docRef = doc(db, LINKS_COLLECTION, trimmedId);
-    const snapshot = await getDoc(docRef);
-    if (snapshot.exists()) {
-      const data = snapshot.data();
-      const clicks = data.clicks || 0;
-      const item: LinkItem = {
-        id: snapshot.id,
-        userId: data.userId,
-        originalUrl: data.originalUrl,
-        shortCode: data.shortCode,
-        title: data.title || 'Untitled Link',
-        clicks,
-        uniqueVisitors: data.uniqueVisitors || (clicks > 0 ? Math.max(1, Math.round(clicks * 0.82)) : 0),
-        tags: data.tags || [],
-        isActive: data.isActive !== false,
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt,
-        expiresAt: data.expiresAt || null,
-        countries: data.countries || {},
-      };
-      upsertLocalLink(item);
-      return item;
+  const targetDocId = localMatch ? localMatch.id : trimmedId;
+
+  const fetchFromFirestore = async (): Promise<LinkItem | null> => {
+    // 1. Fetch directly from Firestore by Document ID
+    try {
+      const docRef = doc(db, LINKS_COLLECTION, targetDocId);
+      const snapshot = await getDoc(docRef);
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        const clicks = data.clicks || 0;
+        const item: LinkItem = {
+          id: snapshot.id,
+          userId: data.userId,
+          originalUrl: data.originalUrl,
+          shortCode: data.shortCode,
+          title: data.title || 'Untitled Link',
+          clicks,
+          uniqueVisitors: data.uniqueVisitors || (clicks > 0 ? Math.max(1, Math.round(clicks * 0.82)) : 0),
+          tags: data.tags || [],
+          isActive: data.isActive !== false,
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+          expiresAt: data.expiresAt || null,
+          countries: data.countries || {},
+        };
+        upsertLocalLink(item);
+        return item;
+      }
+    } catch (err) {
+      console.warn('Firestore getById doc id lookup warning:', err);
     }
-  } catch (err) {
-    console.warn('Firestore getById doc id lookup error:', err);
-  }
 
-  // 2. Try querying by shortCode in Firestore
+    // 2. Try querying by shortCode in Firestore if not found by ID
+    try {
+      const q = query(
+        collection(db, LINKS_COLLECTION),
+        where('shortCode', '==', trimmedId),
+        limit(1)
+      );
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const docSnap = snapshot.docs[0];
+        const data = docSnap.data();
+        const clicks = data.clicks || 0;
+        const item: LinkItem = {
+          id: docSnap.id,
+          userId: data.userId,
+          originalUrl: data.originalUrl,
+          shortCode: data.shortCode,
+          title: data.title || 'Untitled Link',
+          clicks,
+          uniqueVisitors: data.uniqueVisitors || (clicks > 0 ? Math.max(1, Math.round(clicks * 0.82)) : 0),
+          tags: data.tags || [],
+          isActive: data.isActive !== false,
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+          expiresAt: data.expiresAt || null,
+          countries: data.countries || {},
+        };
+        upsertLocalLink(item);
+        return item;
+      }
+    } catch (err) {
+      console.warn('Firestore query by shortCode fallback warning:', err);
+    }
+
+    return localMatch;
+  };
+
+  // Timeout race (2000ms max) to prevent long page hangs on reloads
   try {
-    const q = query(
-      collection(db, LINKS_COLLECTION),
-      where('shortCode', '==', trimmedId),
-      limit(1)
+    const timeoutPromise = new Promise<LinkItem | null>((resolve) =>
+      setTimeout(() => resolve(localMatch), 2000)
     );
-    const snapshot = await getDocs(q);
-    if (!snapshot.empty) {
-      const docSnap = snapshot.docs[0];
-      const data = docSnap.data();
-      const clicks = data.clicks || 0;
-      const item: LinkItem = {
-        id: docSnap.id,
-        userId: data.userId,
-        originalUrl: data.originalUrl,
-        shortCode: data.shortCode,
-        title: data.title || 'Untitled Link',
-        clicks,
-        uniqueVisitors: data.uniqueVisitors || (clicks > 0 ? Math.max(1, Math.round(clicks * 0.82)) : 0),
-        tags: data.tags || [],
-        isActive: data.isActive !== false,
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt,
-        expiresAt: data.expiresAt || null,
-        countries: data.countries || {},
-      };
-      upsertLocalLink(item);
-      return item;
-    }
-  } catch (err) {
-    console.warn('Firestore query by shortCode fallback error:', err);
+    const result = await Promise.race([fetchFromFirestore(), timeoutPromise]);
+    return result || localMatch;
+  } catch {
+    return localMatch;
   }
-
-  // 3. Fallback to local cache only if offline or network unreachable
-  const localMatch = getLocalLinks().find((l) => l.id === trimmedId || l.shortCode === trimmedId);
-  return localMatch || null;
 }
 
 /**
@@ -555,10 +569,9 @@ export async function processLinkClick(link: LinkItem): Promise<{ success: boole
     return { success: true, newClicks: link.clicks || 0 };
   }
 
-  // 2. Filter out rapid repeat clicks within the same session/tab (cooldown 25 seconds)
-  // This avoids double-counting from mobile in-app browser pre-fetching, webview reloading, or app switching
-  if (isSessionDuplicateClick(link.id, 25)) {
-    console.info('[Analytics] Rapid repeat click deduplicated within 25s window for link:', link.shortCode);
+  // 2. Filter out rapid duplicate mount within the same tab (3 seconds cooldown)
+  if (isSessionDuplicateClick(link.id, 3)) {
+    console.info('[Analytics] Rapid duplicate click within 3s deduplicated for link:', link.shortCode);
     return { success: true, newClicks: link.clicks || 0 };
   }
 
@@ -574,9 +587,9 @@ export async function processLinkClick(link: LinkItem): Promise<{ success: boole
     geo = await detectVisitorGeo();
   } catch {}
 
+  const sanitizedCountryKey = (geo.country || 'Unknown').replace(/[\.\$\[\]\#\/]/g, '_').trim() || 'Unknown';
   const currentCountries = { ...(link.countries || {}) };
-  const countryKey = geo.country || 'Unknown';
-  currentCountries[countryKey] = (currentCountries[countryKey] || 0) + 1;
+  currentCountries[sanitizedCountryKey] = (currentCountries[sanitizedCountryKey] || 0) + 1;
 
   // 3. Immediately update local storage and notify any listeners in other tabs
   const updatedLink: LinkItem = {
@@ -619,7 +632,7 @@ export async function processLinkClick(link: LinkItem): Promise<{ success: boole
   try {
     const updatePayload: Record<string, any> = {
       clicks: increment(1),
-      [`countries.${countryKey}`]: increment(1),
+      [`countries.${sanitizedCountryKey}`]: increment(1),
       updatedAt: now,
     };
     if (isUnique) {
@@ -953,88 +966,191 @@ export async function updateShortLink(
   const now = new Date().toISOString();
   const trimmedId = linkId.trim();
 
-  // 1. Update in local cache
+  // 1. Update in local cache first for instant responsiveness
   const local = getLocalLinks();
-  const index = local.findIndex((l) => l.id === trimmedId || l.shortCode === trimmedId);
-  let updatedItem: LinkItem | null = null;
+  const index = local.findIndex((l) => l.id === trimmedId || l.shortCode.toLowerCase() === trimmedId.toLowerCase());
+  let targetLink: LinkItem | null = null;
+  let resolvedDocId = trimmedId;
 
   if (index !== -1) {
-    updatedItem = {
+    targetLink = {
       ...local[index],
       ...updates,
       updatedAt: now,
     };
-    local[index] = updatedItem;
+    if (auth.currentUser && targetLink.userId === 'guest') {
+      targetLink.userId = auth.currentUser.uid;
+    }
+    local[index] = targetLink;
     saveLocalLinks(local);
+    resolvedDocId = targetLink.id;
   }
 
-  // Also update guest links if in guest list
+  // Also update guest links if present in guest list
   const guestLinks = getGuestLinks();
-  const guestIdx = guestLinks.findIndex((l) => l.id === trimmedId || l.shortCode === trimmedId);
-  if (guestIdx !== -1 && updatedItem) {
-    guestLinks[guestIdx] = updatedItem;
-    localStorage.setItem(GUEST_LINKS_KEY, JSON.stringify(guestLinks));
+  const guestIdx = guestLinks.findIndex((l) => l.id === trimmedId || l.shortCode.toLowerCase() === trimmedId.toLowerCase());
+  if (guestIdx !== -1 && targetLink) {
+    guestLinks[guestIdx] = targetLink;
+    try {
+      localStorage.setItem(GUEST_LINKS_KEY, JSON.stringify(guestLinks));
+    } catch {}
   }
 
   // 2. Persist to Firestore
   try {
-    const docRef = doc(db, LINKS_COLLECTION, trimmedId);
+    let docRef = doc(db, LINKS_COLLECTION, resolvedDocId);
+    let docSnap = await getDoc(docRef);
+
+    // If not found by direct doc ID, locate by exact shortCode or lowercase
+    if (!docSnap.exists()) {
+      const q = query(
+        collection(db, LINKS_COLLECTION),
+        where('shortCode', '==', trimmedId),
+        limit(1)
+      );
+      const querySnap = await getDocs(q);
+      if (!querySnap.empty) {
+        docRef = querySnap.docs[0].ref;
+        resolvedDocId = docRef.id;
+        docSnap = querySnap.docs[0];
+      } else {
+        const qLower = query(
+          collection(db, LINKS_COLLECTION),
+          where('shortCodeLower', '==', trimmedId.toLowerCase()),
+          limit(1)
+        );
+        const lowerSnap = await getDocs(qLower);
+        if (!lowerSnap.empty) {
+          docRef = lowerSnap.docs[0].ref;
+          resolvedDocId = docRef.id;
+          docSnap = lowerSnap.docs[0];
+        }
+      }
+    }
+
     const firestoreUpdates: Record<string, any> = {
-      ...updates,
       updatedAt: now,
     };
-    await updateDoc(docRef, firestoreUpdates);
-  } catch (err) {
-    console.warn('Failed to update link in Firestore, cached locally:', err);
+    if (updates.originalUrl !== undefined && updates.originalUrl !== null) {
+      firestoreUpdates.originalUrl = updates.originalUrl;
+    }
+    if (updates.title !== undefined && updates.title !== null) {
+      firestoreUpdates.title = updates.title;
+    }
+    if (updates.tags !== undefined && updates.tags !== null) {
+      firestoreUpdates.tags = updates.tags;
+    }
+    if (updates.isActive !== undefined && updates.isActive !== null) {
+      firestoreUpdates.isActive = updates.isActive;
+    }
+    if (updates.expiresAt !== undefined) {
+      firestoreUpdates.expiresAt = updates.expiresAt; // Can be string or null
+    }
+
+    // If logged-in user is editing an unclaimed guest link, claim ownership
+    if (auth.currentUser && (!docSnap.exists() || docSnap.data()?.userId === 'guest')) {
+      firestoreUpdates.userId = auth.currentUser.uid;
+    }
+
+    if (docSnap.exists()) {
+      await updateDoc(docRef, firestoreUpdates);
+    } else if (targetLink) {
+      // If doc did not exist in Firestore, write full record
+      await setDoc(docRef, {
+        ...targetLink,
+        ...firestoreUpdates,
+        shortCodeLower: targetLink.shortCode.toLowerCase(),
+      });
+    }
+
+    // Refresh local cache with fully resolved record if we found the document in Firestore
+    if (docSnap.exists()) {
+      const freshData = docSnap.data();
+      const resolvedItem: LinkItem = {
+        id: docSnap.id,
+        userId: firestoreUpdates.userId || freshData.userId,
+        originalUrl: updates.originalUrl || freshData.originalUrl,
+        shortCode: freshData.shortCode,
+        title: updates.title !== undefined ? updates.title : (freshData.title || freshData.shortCode),
+        clicks: freshData.clicks || 0,
+        uniqueVisitors: freshData.uniqueVisitors || 0,
+        tags: updates.tags !== undefined ? updates.tags : (freshData.tags || []),
+        isActive: updates.isActive !== undefined ? updates.isActive : (freshData.isActive !== false),
+        createdAt: freshData.createdAt || now,
+        updatedAt: now,
+        expiresAt: updates.expiresAt !== undefined ? updates.expiresAt : (freshData.expiresAt || null),
+      };
+      upsertLocalLink(resolvedItem);
+      targetLink = resolvedItem;
+    }
+  } catch (err: any) {
+    console.error('Failed to update link in Firestore:', err);
+    throw err;
   }
 
-  return updatedItem;
+  // Cross-tab notification ping
+  try {
+    localStorage.setItem('shortee_link_updated_ping', `${resolvedDocId}_${Date.now()}`);
+  } catch {}
+
+  return targetLink;
 }
 
 /**
- * Fetch click events for a specific link
+ * Fetch click events for a specific link with fast 2.5s network timeout
  */
 export async function getLinkClickEvents(
   linkId: string,
   ownerUserId?: string
 ): Promise<ClickEvent[]> {
-  try {
-    const targetUserId = ownerUserId || auth.currentUser?.uid;
-    const constraints: any[] = [
-      where('linkId', '==', linkId),
-      limit(100),
-    ];
-    if (targetUserId) {
-      constraints.push(where('userId', '==', targetUserId));
-    }
-    const q = query(collection(db, CLICKS_COLLECTION), ...constraints);
-    const snapshot = await getDocs(q);
-    const events: ClickEvent[] = [];
-    snapshot.forEach((docSnap) => {
-      const data = docSnap.data();
-      events.push({
-        id: docSnap.id,
-        linkId: data.linkId,
-        userId: data.userId,
-        linkTitle: data.linkTitle,
-        shortCode: data.shortCode,
-        timestamp: data.timestamp,
-        referrer: data.referrer || 'Direct / None',
-        deviceType: data.deviceType || 'Desktop',
-        browser: data.browser || 'Other',
-        operatingSystem: data.operatingSystem || 'Other',
-        country: data.country || 'Unknown',
-        countryCode: data.countryCode || 'XX',
-        city: data.city || undefined,
-        isUnique: data.isUnique ?? true,
+  const fetchEvents = async (): Promise<ClickEvent[]> => {
+    try {
+      const targetUserId = ownerUserId || auth.currentUser?.uid;
+      const constraints: any[] = [
+        where('linkId', '==', linkId),
+        limit(100),
+      ];
+      if (targetUserId) {
+        constraints.push(where('userId', '==', targetUserId));
+      }
+      const q = query(collection(db, CLICKS_COLLECTION), ...constraints);
+      const snapshot = await getDocs(q);
+      const events: ClickEvent[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        events.push({
+          id: docSnap.id,
+          linkId: data.linkId,
+          userId: data.userId,
+          linkTitle: data.linkTitle,
+          shortCode: data.shortCode,
+          timestamp: data.timestamp,
+          referrer: data.referrer || 'Direct / None',
+          deviceType: data.deviceType || 'Desktop',
+          browser: data.browser || 'Other',
+          operatingSystem: data.operatingSystem || 'Other',
+          country: data.country || 'Unknown',
+          countryCode: data.countryCode || 'XX',
+          city: data.city || undefined,
+          isUnique: data.isUnique ?? true,
+        });
       });
-    });
 
-    return events.sort(
-      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      return events.sort(
+        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+    } catch (err) {
+      console.warn('Could not fetch click events warning:', err);
+      return [];
+    }
+  };
+
+  try {
+    const timeoutPromise = new Promise<ClickEvent[]>((resolve) =>
+      setTimeout(() => resolve([]), 2500)
     );
-  } catch (err) {
-    console.warn('Could not fetch click events (offline mode active):', err);
+    return await Promise.race([fetchEvents(), timeoutPromise]);
+  } catch {
     return [];
   }
 }

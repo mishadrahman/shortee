@@ -256,34 +256,37 @@ export function getOrCreateVisitorId(): string {
 
 /**
  * Checks if current visitor is an automated bot, preview crawler, or web scraper.
- * Standard URL shortener filter (e.g., Bitly, Dub): prevents Facebook, Twitter, WhatsApp
- * preview bots and automated crawlers from inflating human click analytics.
+ * Standard URL shortener filter (e.g., Bitly, Dub): prevents preview bots and automated crawlers
+ * from inflating human click analytics, while ensuring all human social clicks (Facebook in-app, etc.) pass.
  */
 export function isBotOrCrawler(): boolean {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
 
-  // 1. Check navigator.webdriver (automated headless browsers like Selenium, Puppeteer)
-  if (navigator.webdriver) {
+  const ua = (navigator.userAgent || '').toLowerCase();
+
+  // If this is a real user in Facebook, Instagram, Twitter, or LinkedIn in-app browser, it is ALWAYS a real human visit!
+  if (/fban|fbav|fb_iab|instagram|linkedinapp|twitterandroid|twitterforiphone/i.test(ua)) {
+    return false;
+  }
+
+  // Check automated headless test environments only when not in standard browser
+  if (navigator.webdriver && !(window as any).chrome) {
     return true;
   }
 
-  const ua = (navigator.userAgent || '').toLowerCase();
-
-  // 2. Comprehensive bot / crawler / social media preview scraper signatures
+  // Specific crawler & preview bot signatures
   const botSignatures = [
     'facebookexternalhit',
     'facebot',
     'meta-externalagent',
     'facebookcatalog',
-    'facebookplatform',
     'twitterbot',
     'linkedinbot',
-    'whatsapp',
     'telegrambot',
     'slackbot',
     'discordbot',
     'skypeuripreview',
-    'pinterest',
+    'pinterestbot',
     'googlebot',
     'bingbot',
     'yandexbot',
@@ -302,7 +305,8 @@ export function isBotOrCrawler(): boolean {
     'scraper',
     'bot/',
     '/bot',
-    'preview',
+    '+http://',
+    '+https://',
   ];
 
   return botSignatures.some((signature) => ua.includes(signature));
@@ -310,20 +314,18 @@ export function isBotOrCrawler(): boolean {
 
 /**
  * Rapid repeat click deduplication for the same visitor/session.
- * Prevents mobile in-app browsers (Facebook, Instagram, LinkedIn) from registering
- * 2-3 clicks for a single human tap due to pre-fetching + WebView mount + app-switching reloads.
- * Default cooldown: 30 seconds.
+ * Prevents double-counting from single-page re-renders while ensuring distinct user visits are counted.
+ * Cooldown: 4 seconds.
  */
-export function isSessionDuplicateClick(linkId: string, cooldownSeconds = 30): boolean {
+export function isSessionDuplicateClick(linkId: string, cooldownSeconds = 4): boolean {
   if (typeof window === 'undefined') return false;
 
   try {
     const sessionKey = `shortee_session_hit_${linkId}`;
-    const localKey = `shortee_recent_hit_${linkId}`;
     const now = Date.now();
     const cooldownMs = cooldownSeconds * 1000;
 
-    // Check sessionStorage (per tab / in-app browser session)
+    // Check sessionStorage (per tab / session)
     const sessionHit = sessionStorage.getItem(sessionKey);
     if (sessionHit) {
       const lastSessionTime = parseInt(sessionHit, 10);
@@ -332,18 +334,7 @@ export function isSessionDuplicateClick(linkId: string, cooldownSeconds = 30): b
       }
     }
 
-    // Check localStorage (per browser/device instance)
-    const localHit = localStorage.getItem(localKey);
-    if (localHit) {
-      const lastLocalTime = parseInt(localHit, 10);
-      if (!isNaN(lastLocalTime) && now - lastLocalTime < cooldownMs) {
-        return true;
-      }
-    }
-
-    // Record this hit timestamp
     sessionStorage.setItem(sessionKey, now.toString());
-    localStorage.setItem(localKey, now.toString());
     return false;
   } catch {
     return false;
@@ -410,43 +401,78 @@ export function buildUtmUrl(
  * Common timezone prefix to Country & Code mapping for instantaneous offline/fallback geo detection
  */
 const TIMEZONE_COUNTRY_MAP: Record<string, { country: string; code: string }> = {
+  // Asia
   'Asia/Dhaka': { country: 'Bangladesh', code: 'BD' },
   'Asia/Kolkata': { country: 'India', code: 'IN' },
   'Asia/Calcutta': { country: 'India', code: 'IN' },
   'Asia/Karachi': { country: 'Pakistan', code: 'PK' },
+  'Asia/Colombo': { country: 'Sri Lanka', code: 'LK' },
+  'Asia/Kathmandu': { country: 'Nepal', code: 'NP' },
   'Asia/Dubai': { country: 'United Arab Emirates', code: 'AE' },
   'Asia/Riyadh': { country: 'Saudi Arabia', code: 'SA' },
+  'Asia/Qatar': { country: 'Qatar', code: 'QA' },
+  'Asia/Kuwait': { country: 'Kuwait', code: 'KW' },
   'Asia/Singapore': { country: 'Singapore', code: 'SG' },
-  'Asia/Tokyo': { country: 'Japan', code: 'JP' },
-  'Asia/Seoul': { country: 'South Korea', code: 'KR' },
+  'Asia/Kuala_Lumpur': { country: 'Malaysia', code: 'MY' },
   'Asia/Bangkok': { country: 'Thailand', code: 'TH' },
   'Asia/Jakarta': { country: 'Indonesia', code: 'ID' },
-  'Asia/Kuala_Lumpur': { country: 'Malaysia', code: 'MY' },
+  'Asia/Manila': { country: 'Philippines', code: 'PH' },
+  'Asia/Ho_Chi_Minh': { country: 'Vietnam', code: 'VN' },
+  'Asia/Hong_Kong': { country: 'Hong Kong', code: 'HK' },
+  'Asia/Taipei': { country: 'Taiwan', code: 'TW' },
+  'Asia/Tokyo': { country: 'Japan', code: 'JP' },
+  'Asia/Seoul': { country: 'South Korea', code: 'KR' },
+  'Asia/Shanghai': { country: 'China', code: 'CN' },
+  // Europe
   'Europe/London': { country: 'United Kingdom', code: 'GB' },
   'Europe/Paris': { country: 'France', code: 'FR' },
   'Europe/Berlin': { country: 'Germany', code: 'DE' },
   'Europe/Rome': { country: 'Italy', code: 'IT' },
   'Europe/Madrid': { country: 'Spain', code: 'ES' },
   'Europe/Amsterdam': { country: 'Netherlands', code: 'NL' },
+  'Europe/Brussels': { country: 'Belgium', code: 'BE' },
   'Europe/Zurich': { country: 'Switzerland', code: 'CH' },
+  'Europe/Vienna': { country: 'Austria', code: 'AT' },
   'Europe/Stockholm': { country: 'Sweden', code: 'SE' },
+  'Europe/Oslo': { country: 'Norway', code: 'NO' },
+  'Europe/Copenhagen': { country: 'Denmark', code: 'DK' },
+  'Europe/Helsinki': { country: 'Finland', code: 'FI' },
   'Europe/Dublin': { country: 'Ireland', code: 'IE' },
+  'Europe/Warsaw': { country: 'Poland', code: 'PL' },
+  'Europe/Prague': { country: 'Czech Republic', code: 'CZ' },
+  'Europe/Lisbon': { country: 'Portugal', code: 'PT' },
+  'Europe/Athens': { country: 'Greece', code: 'GR' },
+  'Europe/Istanbul': { country: 'Turkey', code: 'TR' },
+  'Europe/Moscow': { country: 'Russia', code: 'RU' },
+  // Americas
   'America/New_York': { country: 'United States', code: 'US' },
   'America/Chicago': { country: 'United States', code: 'US' },
   'America/Denver': { country: 'United States', code: 'US' },
   'America/Los_Angeles': { country: 'United States', code: 'US' },
   'America/Phoenix': { country: 'United States', code: 'US' },
+  'America/Anchorage': { country: 'United States', code: 'US' },
+  'America/Honolulu': { country: 'United States', code: 'US' },
   'America/Toronto': { country: 'Canada', code: 'CA' },
   'America/Vancouver': { country: 'Canada', code: 'CA' },
-  'America/Sao_Paulo': { country: 'Brazil', code: 'BR' },
+  'America/Montreal': { country: 'Canada', code: 'CA' },
   'America/Mexico_City': { country: 'Mexico', code: 'MX' },
+  'America/Sao_Paulo': { country: 'Brazil', code: 'BR' },
+  'America/Buenos_Aires': { country: 'Argentina', code: 'AR' },
+  'America/Bogota': { country: 'Colombia', code: 'CO' },
+  'America/Santiago': { country: 'Chile', code: 'CL' },
+  'America/Lima': { country: 'Peru', code: 'PE' },
+  // Oceania
   'Australia/Sydney': { country: 'Australia', code: 'AU' },
   'Australia/Melbourne': { country: 'Australia', code: 'AU' },
+  'Australia/Brisbane': { country: 'Australia', code: 'AU' },
+  'Australia/Perth': { country: 'Australia', code: 'AU' },
   'Pacific/Auckland': { country: 'New Zealand', code: 'NZ' },
+  // Africa
   'Africa/Cairo': { country: 'Egypt', code: 'EG' },
   'Africa/Johannesburg': { country: 'South Africa', code: 'ZA' },
   'Africa/Lagos': { country: 'Nigeria', code: 'NG' },
   'Africa/Nairobi': { country: 'Kenya', code: 'KE' },
+  'Africa/Casablanca': { country: 'Morocco', code: 'MA' },
 };
 
 /**
@@ -477,7 +503,7 @@ export function getCountryNameFromCode(code?: string, defaultName = 'Unknown Loc
 }
 
 /**
- * Detects visitor geolocation (Country, Code, City) with caching and fast fallback.
+ * Detects visitor geolocation (Country, Code, City) with caching and fast multi-provider fallback.
  * Uses lightweight client-side cache -> fast IP geo API -> timezone fallback.
  */
 export async function detectVisitorGeo(): Promise<{ country: string; countryCode: string; city?: string }> {
@@ -487,12 +513,12 @@ export async function detectVisitorGeo(): Promise<{ country: string; countryCode
 
   const CACHE_KEY = 'shortee_geo_cache';
 
-  // 1. Check local session cache
+  // 1. Check local session cache (only if valid, not placeholder)
   try {
     const cached = sessionStorage.getItem(CACHE_KEY) || localStorage.getItem(CACHE_KEY);
     if (cached) {
       const parsed = JSON.parse(cached);
-      if (parsed?.country && parsed?.countryCode) {
+      if (parsed?.country && parsed?.countryCode && parsed.country !== 'Unknown' && parsed.countryCode !== 'XX') {
         return parsed;
       }
     }
@@ -506,29 +532,43 @@ export async function detectVisitorGeo(): Promise<{ country: string; countryCode
     if (tz && TIMEZONE_COUNTRY_MAP[tz]) {
       fallbackCountry = TIMEZONE_COUNTRY_MAP[tz].country;
       fallbackCode = TIMEZONE_COUNTRY_MAP[tz].code;
-    } else if (tz) {
-      // General continent heuristic
-      if (tz.startsWith('America/')) {
-        fallbackCountry = 'United States';
-        fallbackCode = 'US';
-      } else if (tz.startsWith('Europe/')) {
-        fallbackCountry = 'Europe';
-        fallbackCode = 'EU';
-      } else if (tz.startsWith('Asia/')) {
-        fallbackCountry = 'Asia';
-        fallbackCode = 'AS';
-      }
     }
   } catch {}
 
-  // 3. Try ultra-fast public IP-to-Country lookup with 1200ms timeout
+  // 3. Provider 1: freeipapi.com (Reliable, fast HTTPS, CORS open)
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 1200);
 
+    const response = await fetch('https://freeipapi.com/api/json', {
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data?.countryName && data?.countryCode) {
+        const result = {
+          country: data.countryName,
+          countryCode: String(data.countryCode).toUpperCase(),
+          city: data.cityName || undefined,
+        };
+        try {
+          sessionStorage.setItem(CACHE_KEY, JSON.stringify(result));
+          localStorage.setItem(CACHE_KEY, JSON.stringify(result));
+        } catch {}
+        return result;
+      }
+    }
+  } catch {}
+
+  // 4. Provider 2: api.country.is fallback
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1000);
+
     const response = await fetch('https://api.country.is/', {
       signal: controller.signal,
-      cache: 'force-cache',
     });
     clearTimeout(timeoutId);
 
@@ -546,14 +586,10 @@ export async function detectVisitorGeo(): Promise<{ country: string; countryCode
         return result;
       }
     }
-  } catch {
-    // Timeout or network offline -> use fallback
-  }
-
-  const result = { country: fallbackCountry, countryCode: fallbackCode };
-  try {
-    sessionStorage.setItem(CACHE_KEY, JSON.stringify(result));
   } catch {}
+
+  // 5. Return timezone fallback
+  const result = { country: fallbackCountry !== 'Unknown' ? fallbackCountry : 'Unknown', countryCode: fallbackCode };
   return result;
 }
 

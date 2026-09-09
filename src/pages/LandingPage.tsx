@@ -19,6 +19,7 @@ import {
   Globe,
   UserPlus,
   Lock,
+  Edit3,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useAppRouter } from '../lib/router';
@@ -33,6 +34,7 @@ import {
 } from '../services/linkService';
 import { LinkItem } from '../types';
 import { QRCodeCanvas } from 'qrcode.react';
+import { EditLinkModal } from '../components/EditLinkModal';
 
 interface LandingPageProps {
   onOpenQr?: (link: LinkItem) => void;
@@ -56,6 +58,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenQr }) => {
   const [copied, setCopied] = useState(false);
   const [guestLinks, setGuestLinks] = useState<LinkItem[]>([]);
   const [copiedGuestId, setCopiedGuestId] = useState<string | null>(null);
+  const [editingLink, setEditingLink] = useState<LinkItem | null>(null);
 
   // Load and synchronize guest links
   useEffect(() => {
@@ -486,6 +489,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenQr }) => {
                       {copied ? 'Copied!' : 'Copy Link'}
                     </button>
                     <button
+                      id="edit-created-link-btn"
+                      type="button"
+                      onClick={() => setEditingLink(createdResult)}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white/60 dark:bg-slate-900/60 hover:bg-emerald-100/50 text-emerald-900 dark:text-emerald-200 text-xs font-medium transition-all active:scale-95 cursor-pointer"
+                      title="Edit Destination URL"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      Edit Destination
+                    </button>
+                    <button
                       id="qr-created-link-btn"
                       type="button"
                       onClick={() => onOpenQr && onOpenQr(createdResult)}
@@ -576,6 +589,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenQr }) => {
                           title="Copy Link"
                         >
                           {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setEditingLink(link)}
+                          className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                          title="Edit Destination URL"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
                         </button>
 
                         <button
@@ -835,6 +857,23 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenQr }) => {
           </div>
         </div>
       </section>
+
+      {/* Edit Link Destination & Settings Modal */}
+      {editingLink && (
+        <EditLinkModal
+          link={editingLink}
+          isOpen={!!editingLink}
+          onClose={() => setEditingLink(null)}
+          onLinkUpdated={(updated) => {
+            if (createdResult && (createdResult.id === updated.id || createdResult.shortCode === updated.shortCode)) {
+              setCreatedResult(updated);
+            }
+            setGuestLinks((prev) =>
+              prev.map((l) => (l.id === updated.id || l.shortCode === updated.shortCode ? updated : l))
+            );
+          }}
+        />
+      )}
     </div>
   );
 };
