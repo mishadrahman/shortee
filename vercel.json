@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/api/redirect", "destination": "/api/redirect" },
+    { "source": "/:shortCode((?!dashboard|analytics|login|signup|register|settings|404|terms|privacy|about|assets|favicon|robots|sitemap|index).*)", "destination": "/api/redirect?code=:shortCode" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

@@ -308,20 +308,43 @@ export async function createShortLink({
     ogSiteName: ogSiteName?.trim() || undefined,
   };
 
-  // Always save locally first so user gets instant responsive UI
+  // Construct payload with ONLY defined fields to strictly prevent Firestore undefined property rejections
+  const docPayload: Record<string, any> = {
+    id: newLink.id,
+    userId: newLink.userId,
+    originalUrl: newLink.originalUrl,
+    shortCode: newLink.shortCode,
+    shortCodeLower: shortCode.toLowerCase(),
+    title: newLink.title,
+    clicks: 0,
+    uniqueVisitors: 0,
+    tags: newLink.tags,
+    isActive: true,
+    createdAt: now,
+    updatedAt: now,
+    expiresAt: newLink.expiresAt,
+    password: newLink.password,
+    isPasswordProtected: newLink.isPasswordProtected,
+  };
+
+  if (newLink.ogTitle) docPayload.ogTitle = newLink.ogTitle;
+  if (newLink.ogDescription) docPayload.ogDescription = newLink.ogDescription;
+  if (newLink.ogImage) docPayload.ogImage = newLink.ogImage;
+  if (newLink.ogSiteName) docPayload.ogSiteName = newLink.ogSiteName;
+
+  // Authoritative write to Firestore
+  try {
+    await setDoc(linkDocRef, docPayload);
+  } catch (err: any) {
+    console.error('Firestore setDoc failed:', err);
+    throw new Error(err?.message || 'Failed to save link to cloud database. Please try again.');
+  }
+
+  // Save to local cache only after cloud persistence succeeds
   upsertLocalLink(newLink);
 
   if (resolvedUserId === 'guest') {
     saveGuestLink(newLink);
-  }
-
-  try {
-    await setDoc(linkDocRef, {
-      ...newLink,
-      shortCodeLower: shortCode.toLowerCase(),
-    });
-  } catch (err) {
-    console.warn('Saved to offline cache (Firestore write queued or unavailable):', err);
   }
 
   return newLink;

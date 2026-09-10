@@ -36,6 +36,7 @@ export const db = (() => {
       app,
       {
         experimentalForceLongPolling: true,
+        ignoreUndefinedProperties: true,
       },
       databaseId
     );
