@@ -439,7 +439,10 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
                   {/* Link Details (Col 5) */}
                   <div className="md:col-span-5 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-semibold text-sm text-slate-900 dark:text-white truncate max-w-xs sm:max-w-sm">
+                      <h3
+                        title={link.title || link.shortCode}
+                        className="font-semibold text-sm text-slate-900 dark:text-white truncate max-w-[220px] sm:max-w-xs md:max-w-sm"
+                      >
                         {link.title || link.shortCode}
                       </h3>
 

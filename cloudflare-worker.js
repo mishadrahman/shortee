@@ -89,6 +89,19 @@ async function getLinkFromFirestore(code) {
   return null;
 }
 
+function decodeEntities(str) {
+  if (!str) return '';
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .trim();
+}
+
 async function scrapeMetadata(targetUrl) {
   try {
     const res = await fetch(targetUrl, {
@@ -108,12 +121,17 @@ async function scrapeMetadata(targetUrl) {
     };
 
     const titleMatch = text.match(/<title[^>]*>([^<]*)<\/title>/i);
-    const title = getMeta('og:title') || getMeta('twitter:title') || (titleMatch ? titleMatch[1] : '');
-    const description = getMeta('og:description') || getMeta('twitter:description') || getMeta('description') || '';
+    const rawTitle = getMeta('og:title') || getMeta('twitter:title') || (titleMatch ? titleMatch[1] : '');
+    const rawDesc = getMeta('og:description') || getMeta('twitter:description') || getMeta('description') || '';
     const image = getMeta('og:image:secure_url') || getMeta('og:image') || getMeta('twitter:image') || '';
-    const siteName = getMeta('og:site_name') || '';
+    const rawSiteName = getMeta('og:site_name') || '';
 
-    return { title, description, image, siteName };
+    return {
+      title: decodeEntities(rawTitle),
+      description: decodeEntities(rawDesc),
+      image: image.trim(),
+      siteName: decodeEntities(rawSiteName),
+    };
   } catch (e) {
     return {};
   }
@@ -143,22 +161,65 @@ export default {
       return fetch(request);
     }
 
-    let ogTitle = link.ogTitle || link.title;
-    let ogDescription = link.ogDescription;
-    let ogImage = link.ogImage;
-    let ogSiteName = link.ogSiteName;
+    let ogTitle = link.ogTitle || link.title || '';
+    let ogDescription = link.ogDescription || '';
+    let ogImage = link.ogImage || '';
+    let ogSiteName = link.ogSiteName || '';
 
-    if (!ogTitle || !ogImage) {
-      const scraped = await scrapeMetadata(link.originalUrl);
-      ogTitle = ogTitle || scraped.title;
-      ogDescription = ogDescription || scraped.description;
-      ogImage = ogImage || scraped.image;
-      ogSiteName = ogSiteName || scraped.siteName;
+    // Check if the current title is just a domain or url fallback (e.g. "dhalibaba.com")
+    const isDomainFallback = (str) => {
+      if (!str || !str.trim()) return true;
+      const t = str.trim().toLowerCase();
+      try {
+        const host = new URL(link.originalUrl).hostname.replace(/^www\./, '').toLowerCase();
+        if (t === host || t.includes(host)) return true;
+      } catch {}
+      return /\.(com|xyz|net|org|co|io|site|shop|store|online|tech|edu|gov|bd)\b/i.test(t);
+    };
+
+    // Scrape destination webpage to fetch real product/article title and image
+    const scraped = await scrapeMetadata(link.originalUrl);
+
+    // If existing title is just a domain/empty, prioritize the real scraped page title!
+    if (scraped.title && (isDomainFallback(ogTitle) || !ogTitle)) {
+      ogTitle = scraped.title;
+    } else if (!ogTitle) {
+      ogTitle = link.title || scraped.title || '';
+    }
+
+    if (scraped.image && !ogImage) {
+      ogImage = scraped.image;
+    }
+    if (scraped.description && (!ogDescription || isDomainFallback(ogDescription))) {
+      ogDescription = scraped.description;
+    }
+    if (scraped.siteName && !ogSiteName) {
+      ogSiteName = scraped.siteName;
+    }
+
+    // Fallback siteName from destination URL
+    if (!ogSiteName) {
+      try {
+        ogSiteName = new URL(link.originalUrl).hostname.replace(/^www\./, '');
+      } catch {
+        ogSiteName = 'shortee.xyz';
+      }
+    }
+
+    // Limit title and description length so social cards stay crisp and never overflow
+    const MAX_TITLE_LENGTH = 75;
+    const MAX_DESC_LENGTH = 150;
+
+    if (ogTitle && ogTitle.length > MAX_TITLE_LENGTH) {
+      ogTitle = ogTitle.slice(0, MAX_TITLE_LENGTH - 3).trim() + '...';
+    }
+    if (ogDescription && ogDescription.length > MAX_DESC_LENGTH) {
+      ogDescription = ogDescription.slice(0, MAX_DESC_LENGTH - 3).trim() + '...';
     }
 
     const destination = link.originalUrl;
-    const finalTitle = ogTitle || destination;
-    const finalDesc = ogDescription || `Access ${destination} via Shortee.`;
+    const finalTitle = ogTitle || ogSiteName || destination;
+    const finalDesc = ogDescription || `Access ${ogSiteName || destination} via Shortee.`;
 
     const html = `<!DOCTYPE html>
 <html lang="en">

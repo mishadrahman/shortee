@@ -13,19 +13,15 @@ import {
   Calendar,
   Clock,
   Tag,
-  Share2,
   SlidersHorizontal,
   Lock,
   KeyRound,
   Eye,
   EyeOff,
-  Globe,
   ImageIcon,
-  Loader2,
 } from 'lucide-react';
 import { validateLongUrl, validateCustomAlias, buildShortUrl, buildUtmUrl } from '../lib/urlUtils';
 import { createShortLink } from '../services/linkService';
-import { fetchDestinationPreview, DestinationPreviewData } from '../services/previewService';
 import { useAuth } from '../context/AuthContext';
 import { LinkItem, UtmParams } from '../types';
 import { useAppRouter } from '../lib/router';
@@ -85,40 +81,9 @@ export const CreateLinkModal: React.FC<CreateLinkModalProps> = ({
   const [copied, setCopied] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  // Social Open Graph Destination Preview state
-  const [destinationPreview, setDestinationPreview] = useState<DestinationPreviewData | null>(null);
-  const [loadingPreview, setLoadingPreview] = useState(false);
-
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  // Fetch destination metadata automatically for Open Graph share card
-  useEffect(() => {
-    const trimmed = url.trim();
-    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
-      setDestinationPreview(null);
-      setLoadingPreview(false);
-      return;
-    }
-
-    const timer = setTimeout(async () => {
-      setLoadingPreview(true);
-      try {
-        const preview = await fetchDestinationPreview(trimmed);
-        setDestinationPreview(preview);
-        if (preview?.title && !title.trim()) {
-          setTitle(preview.title);
-        }
-      } catch {
-        setDestinationPreview(null);
-      } finally {
-        setLoadingPreview(false);
-      }
-    }, 450);
-
-    return () => clearTimeout(timer);
-  }, [url]);
 
   if (!isOpen || !mounted || typeof document === 'undefined') return null;
 
@@ -218,10 +183,6 @@ export const CreateLinkModal: React.FC<CreateLinkModalProps> = ({
         expiresAt: calculatedExpiresAt,
         tags: tags.length > 0 ? tags : undefined,
         password: showPasswordProtection && password.trim() ? password.trim() : undefined,
-        ogTitle: destinationPreview?.title || undefined,
-        ogDescription: destinationPreview?.description || undefined,
-        ogImage: destinationPreview?.image || undefined,
-        ogSiteName: destinationPreview?.siteName || undefined,
       });
 
       setCreatedLink(link);
@@ -265,8 +226,6 @@ export const CreateLinkModal: React.FC<CreateLinkModalProps> = ({
     setUtm({ source: '', medium: '', campaign: '', term: '', content: '' });
     setExpiryPreset('never');
     setCustomExpiryDate('');
-    setDestinationPreview(null);
-    setLoadingPreview(false);
     setCreatedLink(null);
     setErrorMessage(null);
   };
@@ -459,87 +418,30 @@ export const CreateLinkModal: React.FC<CreateLinkModalProps> = ({
               <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
                 Only valid <code className="font-mono">https://</code> or <code className="font-mono">http://</code> web addresses are supported.
               </p>
-
-              {/* Dynamic Open Graph / Destination Preview Card */}
-              {loadingPreview && (
-                <div className="mt-2.5 p-3 rounded-xl border border-blue-200/80 dark:border-blue-900/60 bg-blue-50/50 dark:bg-blue-950/20 flex items-center gap-2.5 text-xs text-blue-700 dark:text-blue-300 animate-pulse">
-                  <Loader2 className="w-4 h-4 animate-spin shrink-0 text-blue-600 dark:text-blue-400" />
-                  <span>Extracting destination Open Graph preview (WhatsApp, Facebook, Twitter)...</span>
-                </div>
-              )}
-
-              {!loadingPreview && destinationPreview && (
-                <div className="mt-3 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-900/60 text-left">
-                  <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-slate-200/60 dark:border-slate-800">
-                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                      <Share2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                      <span>Social Share Preview (WhatsApp, FB, Twitter)</span>
-                    </div>
-                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                      Open Graph Ready
-                    </span>
-                  </div>
-
-                  <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/90 overflow-hidden shadow-xs">
-                    {destinationPreview.image && (
-                      <div className="relative w-full h-32 bg-slate-100 dark:bg-slate-900 overflow-hidden">
-                        <img
-                          src={destinationPreview.image}
-                          alt="Link preview"
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLElement).style.display = 'none';
-                          }}
-                        />
-                      </div>
-                    )}
-                    <div className="p-3">
-                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 mb-1">
-                        {destinationPreview.favicon ? (
-                          <img
-                            src={destinationPreview.favicon}
-                            alt=""
-                            className="w-3.5 h-3.5 rounded-xs shrink-0"
-                            onError={(e) => {
-                              (e.target as HTMLElement).style.display = 'none';
-                            }}
-                          />
-                        ) : (
-                          <Globe className="w-3.5 h-3.5 shrink-0" />
-                        )}
-                        <span className="font-medium truncate">{destinationPreview.siteName || destinationPreview.url}</span>
-                      </div>
-                      <div className="text-xs font-semibold text-slate-900 dark:text-slate-100 line-clamp-1 mb-0.5">
-                        {destinationPreview.title || 'Untitled'}
-                      </div>
-                      {destinationPreview.description && (
-                        <p className="text-[11px] text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed">
-                          {destinationPreview.description}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <p className="mt-2 text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                    <Check className="w-3 h-3 text-emerald-500" />
-                    When you share your short link, messaging apps and social platforms will display this preview.
-                  </p>
-                </div>
-              )}
             </div>
 
-            {/* Optional Title */}
+            {/* Optional Title with clean limit */}
             <div>
-              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                Link Title <span className="text-slate-400 font-normal">(optional)</span>
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                  Link Title <span className="text-slate-400 font-normal">(optional)</span>
+                </label>
+                <span className="text-[10px] text-slate-400">
+                  {title.length}/70
+                </span>
+              </div>
               <input
                 id="link-title-input"
                 type="text"
-                placeholder="e.g., Summer Campaign Landing Page"
+                maxLength={70}
+                placeholder="e.g., Hollyland Mic or Summer Campaign"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800/80 text-slate-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 placeholder:text-slate-400"
               />
+              <p className="mt-1 text-[11px] text-slate-400">
+                Leave blank to automatically extract a neat, clean title from your link.
+              </p>
             </div>
 
             {/* Advanced Toggle / Custom Alias */}

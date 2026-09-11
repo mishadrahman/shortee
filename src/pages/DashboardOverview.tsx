@@ -366,7 +366,10 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                     {/* Link Info */}
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-sm text-slate-900 dark:text-white truncate max-w-sm sm:max-w-md">
+                        <h3
+                          title={link.title || link.shortCode}
+                          className="font-semibold text-sm text-slate-900 dark:text-white truncate max-w-[220px] sm:max-w-xs md:max-w-sm"
+                        >
                           {link.title || link.shortCode}
                         </h3>
 

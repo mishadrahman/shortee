@@ -225,6 +225,48 @@ export async function generateUniqueShortCode(customAlias?: string): Promise<str
 }
 
 /**
+ * Automatically format a clean, human-readable title from user input or destination URL,
+ * strictly capped to a clean maximum limit (65 chars) so it looks neat in dashboards.
+ */
+export function formatCleanTitle(rawTitle: string | undefined, url: string): string {
+  const MAX_TITLE_LEN = 65;
+
+  if (rawTitle && rawTitle.trim()) {
+    const trimmed = rawTitle.trim();
+    return trimmed.length > MAX_TITLE_LEN ? trimmed.slice(0, MAX_TITLE_LEN - 3).trim() + '...' : trimmed;
+  }
+
+  try {
+    const parsed = new URL(url);
+    const pathname = parsed.pathname.replace(/\/+$/, '');
+    const segments = pathname.split('/').filter(Boolean);
+
+    if (segments.length > 0) {
+      let lastSegment = decodeURIComponent(segments[segments.length - 1]);
+      lastSegment = lastSegment.replace(/\.(html?|php|aspx?|jsp)$/i, '');
+      let readable = lastSegment.replace(/[-_+]+/g, ' ').trim();
+
+      if (readable.length >= 3 && !/^\d+$/.test(readable)) {
+        readable = readable
+          .split(' ')
+          .filter(Boolean)
+          .map((w) => (w.length > 0 ? w.charAt(0).toUpperCase() + w.slice(1) : ''))
+          .join(' ');
+
+        return readable.length > MAX_TITLE_LEN ? readable.slice(0, MAX_TITLE_LEN - 3).trim() + '...' : readable;
+      }
+    }
+
+    const host = parsed.hostname.replace(/^www\./, '');
+    const cleanHost = host.charAt(0).toUpperCase() + host.slice(1);
+    return cleanHost;
+  } catch {
+    const fallback = url.replace(/^https?:\/\//, '').replace(/^www\./, '');
+    return fallback.length > MAX_TITLE_LEN ? fallback.slice(0, MAX_TITLE_LEN - 3) + '...' : fallback;
+  }
+}
+
+/**
  * Create a new shortened link document in Firestore with automatic offline sync
  */
 export async function createShortLink({
@@ -271,16 +313,8 @@ export async function createShortLink({
   const cleanUrl = urlCheck.cleanUrl!;
   const shortCode = await generateUniqueShortCode(customAlias);
 
-  // Derive a fallback title from the URL if none provided
-  let computedTitle = title?.trim() || ogTitle?.trim();
-  if (!computedTitle) {
-    try {
-      const parsed = new URL(cleanUrl);
-      computedTitle = parsed.hostname + (parsed.pathname.length > 1 ? parsed.pathname.slice(0, 20) : '');
-    } catch {
-      computedTitle = cleanUrl.slice(0, 30);
-    }
-  }
+  // Derive a clean, capped title
+  const computedTitle = formatCleanTitle(title, cleanUrl);
 
   const linkDocRef = doc(collection(db, LINKS_COLLECTION));
   const now = new Date().toISOString();
