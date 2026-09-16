@@ -10,10 +10,17 @@ import {
   KeyRound,
   AlertCircle,
   Globe,
+  Copy,
+  Code2,
+  ChevronDown,
+  ChevronUp,
+  Zap,
+  BarChart2,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../lib/theme';
 import { useAppRouter } from '../lib/router';
+import { CLOUDFLARE_WORKER_CODE } from '../data/workerScript';
 
 export const SettingsPage: React.FC = () => {
   const { currentUser, userProfile, updateDisplayName, logout, resetPassword } = useAuth();
@@ -25,6 +32,26 @@ export const SettingsPage: React.FC = () => {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [resetEmailSent, setResetEmailSent] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [copiedWorker, setCopiedWorker] = useState(false);
+  const [showWorkerCode, setShowWorkerCode] = useState(false);
+
+  const handleCopyWorker = async () => {
+    try {
+      await navigator.clipboard.writeText(CLOUDFLARE_WORKER_CODE);
+      setCopiedWorker(true);
+      setTimeout(() => setCopiedWorker(false), 3000);
+    } catch {
+      // Fallback if clipboard API is restricted
+      const textarea = document.createElement('textarea');
+      textarea.value = CLOUDFLARE_WORKER_CODE;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      setCopiedWorker(true);
+      setTimeout(() => setCopiedWorker(false), 3000);
+    }
+  };
 
   const handleUpdateName = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,7 +162,7 @@ export const SettingsPage: React.FC = () => {
           </form>
         </div>
 
-        {/* Custom Domain Configuration */}
+        {/* Custom Domain & Cloudflare Worker Configuration */}
         <div className="p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
@@ -150,7 +177,7 @@ export const SettingsPage: React.FC = () => {
           <p className="text-xs text-slate-500 mb-4">
             Your short links are branded and hosted with your primary short domain.
           </p>
-          <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+          <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 mb-5">
             <div className="flex items-center gap-2.5">
               <span className="font-mono text-sm font-bold text-slate-900 dark:text-white">
                 shortee.xyz
@@ -162,6 +189,65 @@ export const SettingsPage: React.FC = () => {
             <span className="text-xs text-slate-400 font-mono">
               HTTPS Enabled
             </span>
+          </div>
+
+          {/* Cloudflare Worker Code & Real-Time Tracking Integration */}
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-start justify-between gap-4 mb-3">
+              <div>
+                <h3 className="text-xs font-semibold text-slate-900 dark:text-white flex items-center gap-1.5 mb-1">
+                  <Zap className="w-3.5 h-3.5 text-amber-500" />
+                  Cloudflare Worker (Tracking & Social Previews)
+                </h3>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Real-time click tracking, visitor country, device breakdown, and rich social media previews are powered by this Cloudflare Worker script.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCopyWorker}
+                className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shadow-sm ${
+                  copiedWorker
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900'
+                }`}
+              >
+                {copiedWorker ? (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    Copy Worker Code
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between mt-3">
+              <button
+                type="button"
+                onClick={() => setShowWorkerCode(!showWorkerCode)}
+                className="flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
+              >
+                <Code2 className="w-3.5 h-3.5" />
+                {showWorkerCode ? 'Hide Worker Script' : 'View Worker Script'}
+                {showWorkerCode ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+              <span className="text-[10px] text-slate-400">
+                Updated with Firebase Click Tracking & Social Cards
+              </span>
+            </div>
+
+            {showWorkerCode && (
+              <div className="mt-3 relative">
+                <pre className="p-3.5 rounded-xl bg-slate-950 text-slate-300 font-mono text-[11px] leading-relaxed overflow-x-auto max-h-64 border border-slate-800 scrollbar-thin">
+                  <code>{CLOUDFLARE_WORKER_CODE}</code>
+                </pre>
+              </div>
+            )}
           </div>
         </div>
 

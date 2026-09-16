@@ -14,6 +14,7 @@ import {
   onSnapshot,
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
+import { defaultFirebaseConfig } from '../lib/firebaseConfig';
 import { LinkItem, ClickEvent } from '../types';
 import {
   generateRandomShortCode,
@@ -745,7 +746,7 @@ export async function processLinkClick(link: LinkItem): Promise<{ success: boole
       updatePayload.uniqueVisitors = increment(1);
     }
 
-    // Fast atomic update with retry on contention
+    // Fast atomic update with retry on contention, followed by direct REST fallback
     const commitIncrement = async (retries = 2): Promise<void> => {
       try {
         await updateDoc(linkRef, updatePayload);
@@ -754,15 +755,78 @@ export async function processLinkClick(link: LinkItem): Promise<{ success: boole
           await new Promise((r) => setTimeout(r, 100));
           return commitIncrement(retries - 1);
         }
-        console.warn('Firestore updateDoc failed after retries:', updateErr);
+        console.warn('Firestore updateDoc failed, attempting direct REST commit fallback:', updateErr);
+        try {
+          const projectId = defaultFirebaseConfig.projectId;
+          const dbId = defaultFirebaseConfig.firestoreDatabaseId || '(default)';
+          const restTransforms: any[] = [
+            { fieldPath: 'clicks', increment: { integerValue: '1' } },
+            { fieldPath: `countries.${sanitizedCountryKey}`, increment: { integerValue: '1' } },
+          ];
+          if (isUnique) {
+            restTransforms.push({ fieldPath: 'uniqueVisitors', increment: { integerValue: '1' } });
+          }
+          await fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/${dbId}/documents:commit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              writes: [
+                {
+                  update: {
+                    name: `projects/${projectId}/databases/${dbId}/documents/${LINKS_COLLECTION}/${link.id}`,
+                    fields: { updatedAt: { stringValue: now } },
+                  },
+                  updateMask: { fieldPaths: ['updatedAt'] },
+                },
+                {
+                  transform: {
+                    document: `projects/${projectId}/databases/${dbId}/documents/${LINKS_COLLECTION}/${link.id}`,
+                    fieldTransforms: restTransforms,
+                  },
+                },
+              ],
+            }),
+          });
+        } catch (restErr) {
+          console.warn('REST commit fallback error:', restErr);
+        }
       }
     };
 
     const incrementPromise = commitIncrement();
 
-    // Record click event in parallel
-    const addEventPromise = addDoc(collection(db, CLICKS_COLLECTION), clickEvent).catch((evtErr) => {
-      console.warn('addDoc click_events error:', evtErr);
+    // Record click event in parallel with REST fallback
+    const addEventPromise = addDoc(collection(db, CLICKS_COLLECTION), clickEvent).catch(async (evtErr) => {
+      console.warn('addDoc click_events error, attempting REST fallback:', evtErr);
+      try {
+        const projectId = defaultFirebaseConfig.projectId;
+        const dbId = defaultFirebaseConfig.firestoreDatabaseId || '(default)';
+        const eventFields: Record<string, any> = {
+          linkId: { stringValue: String(clickEvent.linkId) },
+          shortCode: { stringValue: String(clickEvent.shortCode) },
+          userId: { stringValue: String(clickEvent.userId || 'guest') },
+          linkTitle: { stringValue: String(clickEvent.linkTitle || 'Short Link') },
+          timestamp: { stringValue: String(clickEvent.timestamp) },
+          referrer: { stringValue: String(clickEvent.referrer || 'Direct / None') },
+          deviceType: { stringValue: String(clickEvent.deviceType || 'Desktop') },
+          browser: { stringValue: String(clickEvent.browser || 'Other') },
+          operatingSystem: { stringValue: String(clickEvent.operatingSystem || 'Other OS') },
+          country: { stringValue: String(clickEvent.country || 'Unknown') },
+          countryCode: { stringValue: String(clickEvent.countryCode || 'XX') },
+          isUnique: { booleanValue: Boolean(clickEvent.isUnique) },
+          visitorId: { stringValue: String(clickEvent.visitorId || 'anon') },
+        };
+        if (clickEvent.city) {
+          eventFields.city = { stringValue: String(clickEvent.city) };
+        }
+        await fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/${dbId}/documents/${CLICKS_COLLECTION}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: eventFields }),
+        });
+      } catch (restEvtErr) {
+        console.warn('REST click_events fallback error:', restEvtErr);
+      }
     });
 
     // Wait for both the primary click counter and the detailed click event to be acknowledged

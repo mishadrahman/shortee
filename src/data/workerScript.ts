@@ -1,4 +1,8 @@
 /**
+ * Shortee Cloudflare Worker script for custom domain routing,
+ * real-time click tracking, and social media OpenGraph previews.
+ */
+export const CLOUDFLARE_WORKER_CODE = `/**
  * Cloudflare Worker for Shortee (shortee.xyz)
  * -------------------------------------------------------------
  * Features:
@@ -11,20 +15,20 @@
  *    - Detects Browser (Chrome, Safari, Firefox, Edge, Opera, Samsung)
  *    - Detects Operating System (Android, iOS, Windows, macOS, Linux)
  *    - Detects Referrer source
- *    - Inserts detailed log into `click_events` collection
+ *    - Inserts detailed log into click_events collection
  *    - Background non-blocking execution via ctx.waitUntil()
  * 3. Dynamic Rich Social Media Previews (Open Graph / Twitter Cards):
  *    - Scrapes destination page metadata (title, image, description)
  *    - Clean title truncation (max 75 chars)
  *    - Rich card preview for WhatsApp, Facebook, Telegram, Twitter, LinkedIn
- *    - Automatically filters preview crawlers so bots don't artificially inflate human clicks
+ *    - Automatically filters preview crawlers so bots do not artificially inflate human clicks
  * 4. Cache-Control: 'private, no-cache, no-store, max-age=0, must-revalidate'
  *    - Prevents Cloudflare edge and browser from caching redirects so EVERY click is counted
  */
 
 const FIREBASE_PROJECT_ID = 'gen-lang-client-0384720479';
 const FIREBASE_DB_ID = 'ai-studio-c657f4f0-89dc-4d68-9b8a-b0bfe6217191';
-const FIRESTORE_API_URL = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIREBASE_DB_ID}/documents`;
+const FIRESTORE_API_URL = \`https://firestore.googleapis.com/v1/projects/\${FIREBASE_PROJECT_ID}/databases/\${FIREBASE_DB_ID}/documents\`;
 
 const RESERVED_ROUTES = new Set([
   '',
@@ -190,8 +194,8 @@ function parseVisitorInfo(request) {
 
   // Browser Name
   let browser = 'Other';
-  if (/edg\//i.test(ua)) browser = 'Edge';
-  else if (/opr\/|opera/i.test(ua)) browser = 'Opera';
+  if (/edg\\//i.test(ua)) browser = 'Edge';
+  else if (/opr\\/|opera/i.test(ua)) browser = 'Opera';
   else if (/samsungbrowser/i.test(ua)) browser = 'Samsung Internet';
   else if (/chrome|crios/i.test(ua)) browser = 'Chrome';
   else if (/firefox|fxios/i.test(ua)) browser = 'Firefox';
@@ -213,7 +217,7 @@ function parseVisitorInfo(request) {
   } else {
     try {
       const refUrl = new URL(referrer);
-      referrer = refUrl.hostname.replace(/^www\./, '');
+      referrer = refUrl.hostname.replace(/^www\\./, '');
     } catch {}
   }
 
@@ -240,7 +244,7 @@ async function getLinkFromFirestore(code) {
 
   const queryField = async (field, val) => {
     try {
-      const res = await fetch(`${FIRESTORE_API_URL}:runQuery`, {
+      const res = await fetch(\`\${FIRESTORE_API_URL}:runQuery\`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -300,7 +304,7 @@ async function recordClickToFirestore(link, visitorInfo, isUnique, visitorId) {
 
   const now = new Date().toISOString();
   const sanitizedCountry = (visitorInfo.country || 'Unknown')
-    .replace(/[\.\$\[\]\#\/]/g, '_')
+    .replace(/[\\.\\$\\[\\]\\#/]/g, '_')
     .trim() || 'Unknown';
 
   // 1. Prepare atomic transform for links document
@@ -310,7 +314,7 @@ async function recordClickToFirestore(link, visitorInfo, isUnique, visitorId) {
       increment: { integerValue: '1' }
     },
     {
-      fieldPath: `countries.${sanitizedCountry}`,
+      fieldPath: \`countries.\${sanitizedCountry}\`,
       increment: { integerValue: '1' }
     }
   ];
@@ -326,7 +330,7 @@ async function recordClickToFirestore(link, visitorInfo, isUnique, visitorId) {
     writes: [
       {
         update: {
-          name: `projects/${FIREBASE_PROJECT_ID}/databases/${FIREBASE_DB_ID}/documents/links/${link.id}`,
+          name: \`projects/\${FIREBASE_PROJECT_ID}/databases/\${FIREBASE_DB_ID}/documents/links/\${link.id}\`,
           fields: {
             updatedAt: { stringValue: now }
           }
@@ -335,7 +339,7 @@ async function recordClickToFirestore(link, visitorInfo, isUnique, visitorId) {
       },
       {
         transform: {
-          document: `projects/${FIREBASE_PROJECT_ID}/databases/${FIREBASE_DB_ID}/documents/links/${link.id}`,
+          document: \`projects/\${FIREBASE_PROJECT_ID}/databases/\${FIREBASE_DB_ID}/documents/links/\${link.id}\`,
           fieldTransforms
         }
       }
@@ -367,12 +371,12 @@ async function recordClickToFirestore(link, visitorInfo, isUnique, visitorId) {
 
   try {
     await Promise.allSettled([
-      fetch(`${FIRESTORE_API_URL}:commit`, {
+      fetch(\`\${FIRESTORE_API_URL}:commit\`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(commitPayload)
       }),
-      fetch(`${FIRESTORE_API_URL}/click_events`, {
+      fetch(\`\${FIRESTORE_API_URL}/click_events\`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(eventPayload)
@@ -395,13 +399,13 @@ async function scrapeMetadata(targetUrl) {
 
     const text = await res.text();
     const getMeta = (prop) => {
-      let m = text.match(new RegExp(`<meta[^>]*?(?:property|name)=["']${prop}["'][^>]*?content=["']([^"']*)["']`, 'i'));
+      let m = text.match(new RegExp(\`<meta[^>]*?(?:property|name)=["']\${prop}["'][^>]*?content=["']([^"']*)["']\`, 'i'));
       if (m && m[1]) return m[1];
-      m = text.match(new RegExp(`<meta[^>]*?content=["']([^"']*)["'][^>]*?(?:property|name)=["']${prop}["']`, 'i'));
+      m = text.match(new RegExp(\`<meta[^>]*?content=["']([^"']*)["'][^>]*?(?:property|name)=["']\${prop}["']\`, 'i'));
       return m && m[1] ? m[1] : '';
     };
 
-    const titleMatch = text.match(/<title[^>]*>([^<]*)<\/title>/i);
+    const titleMatch = text.match(/<title[^>]*>([^<]*)<\\/title>/i);
     const rawTitle = getMeta('og:title') || getMeta('twitter:title') || (titleMatch ? titleMatch[1] : '');
     const rawDesc = getMeta('og:description') || getMeta('twitter:description') || getMeta('description') || '';
     const image = getMeta('og:image:secure_url') || getMeta('og:image') || getMeta('twitter:image') || '';
@@ -447,7 +451,7 @@ export default {
 
     // Determine visitor uniqueness and ID
     const cookieHeader = request.headers.get('cookie') || '';
-    const linkCookieName = `shortee_v_${link.id}`;
+    const linkCookieName = \`shortee_v_\${link.id}\`;
     const isUnique = !cookieHeader.includes(linkCookieName);
 
     let visitorId = '';
@@ -483,10 +487,10 @@ export default {
       if (!str || !str.trim()) return true;
       const t = str.trim().toLowerCase();
       try {
-        const host = new URL(link.originalUrl).hostname.replace(/^www\./, '').toLowerCase();
+        const host = new URL(link.originalUrl).hostname.replace(/^www\\./, '').toLowerCase();
         if (t === host || t.includes(host)) return true;
       } catch {}
-      return /\.(com|xyz|net|org|co|io|site|shop|store|online|tech|edu|gov|bd)\b/i.test(t);
+      return /\\.(com|xyz|net|org|co|io|site|shop|store|online|tech|edu|gov|bd)\\b/i.test(t);
     };
 
     // Scrape destination webpage to fetch real product/article title and image
@@ -510,7 +514,7 @@ export default {
 
     if (!ogSiteName) {
       try {
-        ogSiteName = new URL(link.originalUrl).hostname.replace(/^www\./, '');
+        ogSiteName = new URL(link.originalUrl).hostname.replace(/^www\\./, '');
       } catch {
         ogSiteName = 'shortee.xyz';
       }
@@ -528,39 +532,39 @@ export default {
 
     const destination = link.originalUrl;
     const finalTitle = ogTitle || ogSiteName || destination;
-    const finalDesc = ogDescription || `Access ${ogSiteName || destination} via Shortee.`;
+    const finalDesc = ogDescription || \`Access \${ogSiteName || destination} via Shortee.\`;
 
-    const html = `<!DOCTYPE html>
+    const html = \`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeHtml(finalTitle)}</title>
-  <meta name="description" content="${escapeHtml(finalDesc)}">
+  <title>\${escapeHtml(finalTitle)}</title>
+  <meta name="description" content="\${escapeHtml(finalDesc)}">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="${escapeHtml(destination)}">
-  <meta property="og:title" content="${escapeHtml(finalTitle)}">
-  <meta property="og:description" content="${escapeHtml(finalDesc)}">
-  ${ogImage ? `<meta property="og:image" content="${escapeHtml(ogImage)}">` : ''}
-  ${ogImage ? `<meta property="og:image:secure_url" content="${escapeHtml(ogImage)}">` : ''}
-  ${ogSiteName ? `<meta property="og:site_name" content="${escapeHtml(ogSiteName)}">` : ''}
-  <meta name="twitter:card" content="${ogImage ? 'summary_large_image' : 'summary'}">
-  <meta name="twitter:title" content="${escapeHtml(finalTitle)}">
-  <meta name="twitter:description" content="${escapeHtml(finalDesc)}">
-  ${ogImage ? `<meta name="twitter:image" content="${escapeHtml(ogImage)}">` : ''}
-  <meta http-equiv="refresh" content="0;url=${escapeHtml(destination)}">
-  <link rel="canonical" href="${escapeHtml(destination)}">
-  <script>window.location.replace(${JSON.stringify(destination)});</script>
+  <meta property="og:url" content="\${escapeHtml(destination)}">
+  <meta property="og:title" content="\${escapeHtml(finalTitle)}">
+  <meta property="og:description" content="\${escapeHtml(finalDesc)}">
+  \${ogImage ? \`<meta property="og:image" content="\${escapeHtml(ogImage)}">\` : ''}
+  \${ogImage ? \`<meta property="og:image:secure_url" content="\${escapeHtml(ogImage)}">\` : ''}
+  \${ogSiteName ? \`<meta property="og:site_name" content="\${escapeHtml(ogSiteName)}">\` : ''}
+  <meta name="twitter:card" content="\${ogImage ? 'summary_large_image' : 'summary'}">
+  <meta name="twitter:title" content="\${escapeHtml(finalTitle)}">
+  <meta name="twitter:description" content="\${escapeHtml(finalDesc)}">
+  \${ogImage ? \`<meta name="twitter:image" content="\${escapeHtml(ogImage)}">\` : ''}
+  <meta http-equiv="refresh" content="0;url=\${escapeHtml(destination)}">
+  <link rel="canonical" href="\${escapeHtml(destination)}">
+  <script>window.location.replace(\${JSON.stringify(destination)});</script>
 </head>
 <body style="background:#0f172a;color:#f8fafc;font-family:sans-serif;text-align:center;padding:50px;">
-  <p>Redirecting to <a href="${escapeHtml(destination)}" style="color:#38bdf8;">${escapeHtml(destination)}</a>...</p>
+  <p>Redirecting to <a href="\${escapeHtml(destination)}" style="color:#38bdf8;">\${escapeHtml(destination)}</a>...</p>
   <script>
     setTimeout(function() {
-      window.location.href = ${JSON.stringify(destination)};
+      window.location.href = \${JSON.stringify(destination)};
     }, 150);
   </script>
 </body>
-</html>`;
+</html>\`;
 
     const headers = new Headers({
       'Content-Type': 'text/html; charset=utf-8',
@@ -570,12 +574,12 @@ export default {
     });
 
     if (isUnique) {
-      headers.append('Set-Cookie', `${linkCookieName}=1; Path=/; Max-Age=86400; SameSite=Lax`);
+      headers.append('Set-Cookie', \`\${linkCookieName}=1; Path=/; Max-Age=86400; SameSite=Lax\`);
     }
     if (!vMatch) {
-      headers.append('Set-Cookie', `shortee_vid=${visitorId}; Path=/; Max-Age=31536000; SameSite=Lax`);
+      headers.append('Set-Cookie', \`shortee_vid=\${visitorId}; Path=/; Max-Age=31536000; SameSite=Lax\`);
     }
 
     return new Response(html, { headers });
   }
-};
+};`;

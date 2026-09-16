@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Link2,
@@ -81,9 +81,62 @@ export const CreateLinkModal: React.FC<CreateLinkModalProps> = ({
   const [copied, setCopied] = useState(false);
   const [mounted, setMounted] = useState(false);
 
+  const resetForm = useCallback(() => {
+    setUrl('');
+    setTitle('');
+    setCustomAlias('');
+    setShowAdvanced(false);
+    setShowExpiration(false);
+    setShowPasswordProtection(false);
+    setPassword('');
+    setShowPasswordText(false);
+    setShowUtmBuilder(false);
+    setShowTags(false);
+    setTags([]);
+    setTagInput('');
+    setUtm({ source: '', medium: '', campaign: '', term: '', content: '' });
+    setExpiryPreset('never');
+    setCustomExpiryDate('');
+    setCreatedLink(null);
+    setErrorMessage(null);
+    setCopied(false);
+  }, []);
+
+  const handleClose = useCallback(() => {
+    resetForm();
+    onClose();
+  }, [resetForm, onClose]);
+
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // When modal closes or is re-opened, reset all state so opening the modal always provides a clean form
+  useEffect(() => {
+    if (!isOpen) {
+      resetForm();
+    }
+  }, [isOpen, resetForm]);
+
+  // Lock body scroll and handle Escape key when modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleClose();
+      }
+    };
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, handleClose]);
 
   if (!isOpen || !mounted || typeof document === 'undefined') return null;
 
@@ -210,32 +263,12 @@ export const CreateLinkModal: React.FC<CreateLinkModalProps> = ({
     }
   };
 
-  const resetForm = () => {
-    setUrl('');
-    setTitle('');
-    setCustomAlias('');
-    setShowAdvanced(false);
-    setShowExpiration(false);
-    setShowPasswordProtection(false);
-    setPassword('');
-    setShowPasswordText(false);
-    setShowUtmBuilder(false);
-    setShowTags(false);
-    setTags([]);
-    setTagInput('');
-    setUtm({ source: '', medium: '', campaign: '', term: '', content: '' });
-    setExpiryPreset('never');
-    setCustomExpiryDate('');
-    setCreatedLink(null);
-    setErrorMessage(null);
-  };
-
   const modalContent = (
     <div
       id="create-link-modal-backdrop"
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-fade-in"
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) handleClose();
       }}
     >
       <div
@@ -261,7 +294,7 @@ export const CreateLinkModal: React.FC<CreateLinkModalProps> = ({
           </div>
           <button
             id="close-create-link-modal-btn"
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
@@ -339,8 +372,9 @@ export const CreateLinkModal: React.FC<CreateLinkModalProps> = ({
               </button>
 
               <button
+                id="created-link-done-btn"
                 type="button"
-                onClick={onClose}
+                onClick={handleClose}
                 className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 font-medium text-xs transition-colors cursor-pointer"
               >
                 Done
@@ -364,7 +398,7 @@ export const CreateLinkModal: React.FC<CreateLinkModalProps> = ({
                       <button
                         type="button"
                         onClick={() => {
-                          onClose();
+                          handleClose();
                           navigate('/login');
                         }}
                         className="px-3 py-1 text-xs font-semibold rounded-lg bg-amber-600 text-white hover:bg-amber-700 cursor-pointer"
@@ -374,7 +408,7 @@ export const CreateLinkModal: React.FC<CreateLinkModalProps> = ({
                       <button
                         type="button"
                         onClick={() => {
-                          onClose();
+                          handleClose();
                           navigate('/signup');
                         }}
                         className="px-3 py-1 text-xs font-semibold rounded-lg border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 hover:bg-amber-100/50 cursor-pointer"
@@ -763,7 +797,7 @@ export const CreateLinkModal: React.FC<CreateLinkModalProps> = ({
             <div className="p-4 sm:px-6 border-t border-slate-100 dark:border-slate-800 shrink-0 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-xs flex items-center justify-end gap-3">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleClose}
                 className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-medium transition-colors cursor-pointer"
               >
                 Cancel
