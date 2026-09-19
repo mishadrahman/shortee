@@ -391,6 +391,27 @@ app.get('/api/health', (req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Explicit routes for SEO crawlers and search console validators
+app.get('/sitemap.xml', (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  const distFile = path.join(process.cwd(), 'dist', 'sitemap.xml');
+  const publicFile = path.join(process.cwd(), 'public', 'sitemap.xml');
+  res.sendFile(distFile, (err) => {
+    if (err) res.sendFile(publicFile);
+  });
+});
+
+app.get('/robots.txt', (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  const distFile = path.join(process.cwd(), 'dist', 'robots.txt');
+  const publicFile = path.join(process.cwd(), 'public', 'robots.txt');
+  res.sendFile(distFile, (err) => {
+    if (err) res.sendFile(publicFile);
+  });
+});
+
 // ----------------------------------------------------
 // 2. Open Graph Metadata Extraction Proxy API Route
 // ----------------------------------------------------
