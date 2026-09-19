@@ -276,6 +276,8 @@ async function getLinkFromFirestore(code) {
         shortCode: fields.shortCode?.stringValue || cleanCode,
         originalUrl: fields.originalUrl?.stringValue || '',
         title: fields.title?.stringValue,
+        clicks: fields.clicks ? (parseInt(fields.clicks.integerValue || fields.clicks.doubleValue || '0', 10) || 0) : 0,
+        maxClicks: fields.maxClicks ? (parseInt(fields.maxClicks.integerValue || fields.maxClicks.doubleValue || '0', 10) || null) : null,
         isActive: fields.isActive ? fields.isActive.booleanValue : true,
         expiresAt: fields.expiresAt?.stringValue || null,
         password: fields.password?.stringValue || null,
@@ -283,7 +285,14 @@ async function getLinkFromFirestore(code) {
         ogTitle: fields.ogTitle?.stringValue,
         ogDescription: fields.ogDescription?.stringValue,
         ogImage: fields.ogImage?.stringValue,
-        ogSiteName: fields.ogSiteName?.stringValue
+        ogSiteName: fields.ogSiteName?.stringValue,
+        retargeting: fields.retargeting?.mapValue?.fields ? {
+          metaPixelId: fields.retargeting.mapValue.fields.metaPixelId?.stringValue || null,
+          googleTagId: fields.retargeting.mapValue.fields.googleTagId?.stringValue || null,
+          tiktokPixelId: fields.retargeting.mapValue.fields.tiktokPixelId?.stringValue || null,
+          linkedinPartnerId: fields.retargeting.mapValue.fields.linkedinPartnerId?.stringValue || null,
+          twitterPixelId: fields.retargeting.mapValue.fields.twitterPixelId?.stringValue || null
+        } : null
       };
     } catch (e) {
       return null;
@@ -444,8 +453,10 @@ export default {
       return fetch(request);
     }
 
-    // Paused or expired links pass through to web app for proper alert screens
-    if (link.isActive === false || (link.expiresAt && new Date(link.expiresAt).getTime() <= Date.now())) {
+    // Paused, expired, or click-limit reached links pass through to web app for proper alert screens
+    const isExpired = link.expiresAt && new Date(link.expiresAt).getTime() <= Date.now();
+    const isClickLimitReached = typeof link.maxClicks === 'number' && link.maxClicks > 0 && link.clicks >= link.maxClicks;
+    if (link.isActive === false || isExpired || isClickLimitReached) {
       return fetch(request);
     }
 
@@ -534,6 +545,82 @@ export default {
     const finalTitle = ogTitle || ogSiteName || destination;
     const finalDesc = ogDescription || \`Access \${ogSiteName || destination} via Shortee.\`;
 
+    let retargetingScriptsHtml = '';
+    const hasPixels = Boolean(
+      link.retargeting &&
+      (link.retargeting.metaPixelId ||
+       link.retargeting.googleTagId ||
+       link.retargeting.tiktokPixelId ||
+       link.retargeting.linkedinPartnerId ||
+       link.retargeting.twitterPixelId)
+    );
+
+    if (hasPixels) {
+      if (link.retargeting.metaPixelId) {
+        retargetingScriptsHtml += \`
+  <script>
+    !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+    n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
+    document,'script','https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init', \${JSON.stringify(link.retargeting.metaPixelId)});
+    fbq('track', 'PageView');
+  </script>
+  <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=\${escapeHtml(link.retargeting.metaPixelId)}&ev=PageView&noscript=1"/></noscript>\`;
+      }
+
+      if (link.retargeting.googleTagId) {
+        retargetingScriptsHtml += \`
+  <script async src="https://www.googletagmanager.com/gtag/js?id=\${escapeHtml(link.retargeting.googleTagId)}"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', \${JSON.stringify(link.retargeting.googleTagId)});
+  </script>\`;
+      }
+
+      if (link.retargeting.tiktokPixelId) {
+        retargetingScriptsHtml += \`
+  <script>
+    !function (w, d, t) {
+      w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie"],ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.instance=function(t){for(var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++)ttq.setAndDefer(e,ttq.methods[n]);return e},ttq.load=function(e,n){var i="https://analytics.tiktok.com/i18n/pixel/events.js";ttq._i=ttq._i||{},ttq._i[e]=[],ttq._i[e]._u=i,ttq._t=ttq._t||{},ttq._t[e]=+new Date,ttq._o=ttq._o||{},ttq._o[e]=n||{};var o=document.createElement("script");o.type="text/javascript",o.async=!0,o.src=i+"?sdkid="+e+"&lib="+t;var a=document.getElementsByTagName("script")[0];a.parentNode.insertBefore(o,a)};
+      ttq.load(\${JSON.stringify(link.retargeting.tiktokPixelId)});
+      ttq.page();
+    }(window, document, 'ttq');
+  </script>\`;
+      }
+
+      if (link.retargeting.linkedinPartnerId) {
+        retargetingScriptsHtml += \`
+  <script type="text/javascript">
+    _linkedin_partner_id = \${JSON.stringify(link.retargeting.linkedinPartnerId)};
+    window._linkedin_data_partner_ids = window._linkedin_data_partner_ids || [];
+    window._linkedin_data_partner_ids.push(_linkedin_partner_id);
+    (function(l) {
+    if (!l){window.lintrk = function(a,b){window.lintrk.q.push([a,b])};
+    window.lintrk.q=[]}
+    var s = document.getElementsByTagName("script")[0];
+    var b = document.createElement("script");
+    b.type = "text/javascript";b.async = true;
+    b.src = "https://snap.licdn.com/li.lms-analytics/insight.min.js";
+    s.parentNode.insertBefore(b, s);})(window.lintrk);
+  </script>\`;
+      }
+
+      if (link.retargeting.twitterPixelId) {
+        retargetingScriptsHtml += \`
+  <script>
+    !function(e,t,n,s,u,a){e.twq||(s=e.twq=function(){s.exe?s.exe.apply(s,arguments):s.queue.push(arguments);
+    },s.version='1.1',s.queue=[],u=t.createElement(n),u.async=!0,u.src='https://static.ads-twitter.com/uwt.js',
+    a=t.getElementsByTagName(n)[0],a.parentNode.insertBefore(u,a))}(window,document,'script');
+    twq('config', \${JSON.stringify(link.retargeting.twitterPixelId)});
+    twq('event', 'page_view');
+  </script>\`;
+      }
+    }
+
     const html = \`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -552,16 +639,25 @@ export default {
   <meta name="twitter:title" content="\${escapeHtml(finalTitle)}">
   <meta name="twitter:description" content="\${escapeHtml(finalDesc)}">
   \${ogImage ? \`<meta name="twitter:image" content="\${escapeHtml(ogImage)}">\` : ''}
-  <meta http-equiv="refresh" content="0;url=\${escapeHtml(destination)}">
+  \${hasPixels ? '' : \`<meta http-equiv="refresh" content="0;url=\${escapeHtml(destination)}">\`}
   <link rel="canonical" href="\${escapeHtml(destination)}">
-  <script>window.location.replace(\${JSON.stringify(destination)});</script>
+  \${retargetingScriptsHtml}
+  <script>
+    try {
+      window.history.pushState({ shortee: true }, '', '/');
+    } catch (e) {}
+    \${hasPixels ? \`setTimeout(function() { window.location.href = \${JSON.stringify(destination)}; }, 250);\` : \`window.location.href = \${JSON.stringify(destination)};\`}
+  </script>
 </head>
 <body style="background:#0f172a;color:#f8fafc;font-family:sans-serif;text-align:center;padding:50px;">
   <p>Redirecting to <a href="\${escapeHtml(destination)}" style="color:#38bdf8;">\${escapeHtml(destination)}</a>...</p>
   <script>
     setTimeout(function() {
+      try {
+        window.history.pushState({ shortee: true }, '', '/');
+      } catch (e) {}
       window.location.href = \${JSON.stringify(destination)};
-    }, 150);
+    }, \${hasPixels ? 350 : 150});
   </script>
 </body>
 </html>\`;

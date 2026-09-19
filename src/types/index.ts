@@ -1,3 +1,11 @@
+export interface RetargetingPixels {
+  metaPixelId?: string; // Meta / Facebook Pixel ID (e.g., 123456789012345)
+  googleTagId?: string; // Google Ads / GA4 Conversion ID (e.g., AW-123456789, G-XXXXXXXXXX)
+  tiktokPixelId?: string; // TikTok Pixel ID (e.g., C1234567890)
+  linkedinPartnerId?: string; // LinkedIn Partner ID (e.g., 1234567)
+  twitterPixelId?: string; // Twitter / X Pixel ID (e.g., o1234)
+}
+
 export interface LinkItem {
   id: string;
   userId: string;
@@ -11,9 +19,11 @@ export interface LinkItem {
   createdAt: string; // ISO 8601 string
   updatedAt: string; // ISO 8601 string
   expiresAt?: string | null; // ISO 8601 string or null if never expires
+  maxClicks?: number | null; // Optional click limit e.g. 50, 100, 500 clicks
   countries?: Record<string, number>; // Country code -> click count aggregation
   password?: string | null; // Optional password to protect link access
   isPasswordProtected?: boolean; // Convenience flag indicating password protection
+  retargeting?: RetargetingPixels; // Retargeting tracking pixel IDs
   ogTitle?: string;
   ogDescription?: string;
   ogImage?: string;

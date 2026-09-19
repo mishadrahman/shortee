@@ -18,6 +18,8 @@ import {
   KeyRound,
   Eye,
   EyeOff,
+  Gauge,
+  Target,
 } from 'lucide-react';
 import { validateLongUrl, buildShortUrl, buildUtmUrl } from '../lib/urlUtils';
 import { updateShortLink, formatCleanTitle } from '../services/linkService';
@@ -49,9 +51,19 @@ export const EditLinkModal: React.FC<EditLinkModalProps> = ({
 
   const [showUtmBuilder, setShowUtmBuilder] = useState(false);
   const [showExpiration, setShowExpiration] = useState(false);
+  const [showClickLimit, setShowClickLimit] = useState(false);
+  const [maxClicksInput, setMaxClicksInput] = useState('');
   const [showPasswordProtection, setShowPasswordProtection] = useState(false);
   const [password, setPassword] = useState('');
   const [showPasswordText, setShowPasswordText] = useState(false);
+  const [showRetargeting, setShowRetargeting] = useState(false);
+
+  // Retargeting Pixels
+  const [metaPixelId, setMetaPixelId] = useState('');
+  const [googleTagId, setGoogleTagId] = useState('');
+  const [tiktokPixelId, setTiktokPixelId] = useState('');
+  const [linkedinPartnerId, setLinkedinPartnerId] = useState('');
+  const [twitterPixelId, setTwitterPixelId] = useState('');
 
   const [utm, setUtm] = useState<UtmParams>({
     source: '',
@@ -88,10 +100,26 @@ export const EditLinkModal: React.FC<EditLinkModalProps> = ({
       setPassword(link.password || '');
       setShowPasswordProtection(!!link.password || !!link.isPasswordProtected);
       setShowPasswordText(false);
+      setMaxClicksInput(typeof link.maxClicks === 'number' && link.maxClicks > 0 ? String(link.maxClicks) : '');
+      setShowClickLimit(typeof link.maxClicks === 'number' && link.maxClicks > 0);
       setErrorMessage(null);
       setSuccessMessage(null);
       setShowUtmBuilder(false);
       setShowExpiration(false);
+      setMetaPixelId(link.retargeting?.metaPixelId || '');
+      setGoogleTagId(link.retargeting?.googleTagId || '');
+      setTiktokPixelId(link.retargeting?.tiktokPixelId || '');
+      setLinkedinPartnerId(link.retargeting?.linkedinPartnerId || '');
+      setTwitterPixelId(link.retargeting?.twitterPixelId || '');
+      setShowRetargeting(
+        Boolean(
+          link.retargeting?.metaPixelId ||
+          link.retargeting?.googleTagId ||
+          link.retargeting?.tiktokPixelId ||
+          link.retargeting?.linkedinPartnerId ||
+          link.retargeting?.twitterPixelId
+        )
+      );
     }
   }, [link, isOpen]);
 
@@ -187,15 +215,43 @@ export const EditLinkModal: React.FC<EditLinkModalProps> = ({
 
     const newExpiresAt = calculateExpiresAt();
 
+    let newMaxClicks: number | null = null;
+    if (showClickLimit && maxClicksInput.trim()) {
+      const parsed = parseInt(maxClicksInput.trim(), 10);
+      if (isNaN(parsed) || parsed <= 0) {
+        setErrorMessage('Click limit must be a positive number greater than 0.');
+        return;
+      }
+      newMaxClicks = parsed;
+    }
+
     setLoading(true);
     try {
+      const hasRetargeting = Boolean(
+        metaPixelId.trim() ||
+        googleTagId.trim() ||
+        tiktokPixelId.trim() ||
+        linkedinPartnerId.trim() ||
+        twitterPixelId.trim()
+      );
+
       const updated = await updateShortLink(link.id, {
         originalUrl: validation.cleanUrl || trimmedUrl,
         title: formatCleanTitle(title, validation.cleanUrl || trimmedUrl),
         tags,
         isActive,
         expiresAt: newExpiresAt,
+        maxClicks: newMaxClicks,
         password: showPasswordProtection && password.trim() ? password.trim() : null,
+        retargeting: hasRetargeting
+          ? {
+              metaPixelId: metaPixelId.trim() || undefined,
+              googleTagId: googleTagId.trim() || undefined,
+              tiktokPixelId: tiktokPixelId.trim() || undefined,
+              linkedinPartnerId: linkedinPartnerId.trim() || undefined,
+              twitterPixelId: twitterPixelId.trim() || undefined,
+            }
+          : null,
       });
 
       setSuccessMessage('Destination URL & link settings updated successfully!');
@@ -536,6 +592,85 @@ export const EditLinkModal: React.FC<EditLinkModalProps> = ({
               )}
             </div>
 
+            {/* Click Limit Settings */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowClickLimit(!showClickLimit)}
+                className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:underline cursor-pointer"
+              >
+                <Gauge className="w-3.5 h-3.5 text-slate-400" />
+                <span>
+                  {showClickLimit
+                    ? 'Hide Click Limit'
+                    : typeof link.maxClicks === 'number' && link.maxClicks > 0
+                    ? `Click Limit (${link.clicks || 0}/${link.maxClicks} clicks)`
+                    : 'Set Maximum Click Limit (optional)'}
+                </span>
+              </button>
+
+              {showClickLimit && (
+                <div className="mt-2.5 p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 animate-fade-in">
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="edit-max-clicks-input" className="block text-xs font-medium text-slate-700 dark:text-slate-300">
+                      Total click quota:
+                    </label>
+                    <span className="text-[11px] text-slate-400">Current clicks: {link.clicks || 0}</span>
+                  </div>
+
+                  <div className="relative">
+                    <input
+                      id="edit-max-clicks-input"
+                      type="number"
+                      min="1"
+                      step="1"
+                      placeholder="Enter quota (e.g., 50, 100) or leave empty to disable"
+                      value={maxClicksInput}
+                      onChange={(e) => {
+                        setMaxClicksInput(e.target.value);
+                        if (errorMessage) setErrorMessage(null);
+                      }}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400"
+                    />
+                  </div>
+
+                  {/* Quick Preset Buttons */}
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    {['25', '50', '100', '250', '500', '1000'].map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => {
+                          setMaxClicksInput(preset);
+                          if (errorMessage) setErrorMessage(null);
+                        }}
+                        className={`px-2 py-1 rounded-md text-[11px] font-mono font-medium transition-colors cursor-pointer ${
+                          maxClicksInput === preset
+                            ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900'
+                            : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        {preset} clicks
+                      </button>
+                    ))}
+                    {maxClicksInput && (
+                      <button
+                        type="button"
+                        onClick={() => setMaxClicksInput('')}
+                        className="px-2 py-1 rounded-md text-[11px] font-medium text-rose-500 hover:underline cursor-pointer"
+                      >
+                        Clear limit
+                      </button>
+                    )}
+                  </div>
+
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    When this click limit is reached, redirection halts and visitors receive a traffic quota message.
+                  </p>
+                </div>
+              )}
+            </div>
+
             {/* Password Protection */}
             <div>
               <button
@@ -599,6 +734,125 @@ export const EditLinkModal: React.FC<EditLinkModalProps> = ({
                         Remove password
                       </button>
                     )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Retargeting Pixels Section */}
+            <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900/40">
+              <button
+                type="button"
+                onClick={() => setShowRetargeting(!showRetargeting)}
+                className="w-full flex items-center justify-between p-3.5 text-xs font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <Target className="w-4 h-4 text-rose-500" />
+                  <span>Retargeting & Ad Pixels</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {(metaPixelId || googleTagId || tiktokPixelId || linkedinPartnerId || twitterPixelId) && (
+                    <span className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded-full">
+                      Active
+                    </span>
+                  )}
+                  <span className="text-[11px] text-slate-400">
+                    {showRetargeting ? 'Hide' : 'Configure'}
+                  </span>
+                </div>
+              </button>
+
+              {showRetargeting && (
+                <div className="p-3.5 pt-1 border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-850/50 space-y-3 animate-fade-in">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                    Fire your tracking pixels when visitors click this short link before redirecting to the destination.
+                  </p>
+
+                  <div className="space-y-2.5">
+                    {/* Meta Pixel */}
+                    <div>
+                      <label className="flex items-center justify-between text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>
+                          Meta (Facebook & IG) Pixel ID
+                        </span>
+                        <span className="text-[10px] text-slate-400">e.g. 123456789012345</span>
+                      </label>
+                      <input
+                        id="edit-meta-pixel-input"
+                        type="text"
+                        placeholder="Numeric Pixel ID"
+                        value={metaPixelId}
+                        onChange={(e) => setMetaPixelId(e.target.value)}
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    {/* Google Tag / Ads */}
+                    <div>
+                      <label className="flex items-center justify-between text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>
+                          Google Ads / GA4 Measurement ID
+                        </span>
+                        <span className="text-[10px] text-slate-400">AW-XXXXX or G-XXXXX</span>
+                      </label>
+                      <input
+                        id="edit-google-tag-input"
+                        type="text"
+                        placeholder="AW-XXXXXXXXX or G-XXXXXXXXXX"
+                        value={googleTagId}
+                        onChange={(e) => setGoogleTagId(e.target.value)}
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                      />
+                    </div>
+
+                    {/* TikTok Pixel */}
+                    <div>
+                      <label className="flex items-center justify-between text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-rose-500 inline-block"></span>
+                          TikTok Pixel ID
+                        </span>
+                        <span className="text-[10px] text-slate-400">e.g. C1234567890</span>
+                      </label>
+                      <input
+                        id="edit-tiktok-pixel-input"
+                        type="text"
+                        placeholder="TikTok Pixel ID"
+                        value={tiktokPixelId}
+                        onChange={(e) => setTiktokPixelId(e.target.value)}
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                      />
+                    </div>
+
+                    {/* LinkedIn & Twitter Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-1">
+                          LinkedIn Partner ID
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 1234567"
+                          value={linkedinPartnerId}
+                          onChange={(e) => setLinkedinPartnerId(e.target.value)}
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-sky-600"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-1">
+                          Twitter / X Pixel ID
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. o1234"
+                          value={twitterPixelId}
+                          onChange={(e) => setTwitterPixelId(e.target.value)}
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-700"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

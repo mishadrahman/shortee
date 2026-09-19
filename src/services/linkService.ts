@@ -15,7 +15,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { defaultFirebaseConfig } from '../lib/firebaseConfig';
-import { LinkItem, ClickEvent } from '../types';
+import { LinkItem, ClickEvent, RetargetingPixels } from '../types';
 import {
   generateRandomShortCode,
   validateCustomAlias,
@@ -99,8 +99,10 @@ export async function syncGuestLinksFromDb(): Promise<LinkItem[]> {
           createdAt: data.createdAt,
           updatedAt: data.updatedAt,
           expiresAt: data.expiresAt || null,
+          maxClicks: typeof data.maxClicks === 'number' ? data.maxClicks : null,
           password: data.password || null,
           isPasswordProtected: Boolean(data.password && data.password.trim()),
+          retargeting: data.retargeting || undefined,
         };
 
         if (item.clicks !== link.clicks || item.userId !== link.userId) {
@@ -276,8 +278,10 @@ export async function createShortLink({
   title,
   customAlias,
   expiresAt,
+  maxClicks,
   tags,
   password,
+  retargeting,
   ogTitle,
   ogDescription,
   ogImage,
@@ -288,8 +292,10 @@ export async function createShortLink({
   title?: string;
   customAlias?: string;
   expiresAt?: string | null;
+  maxClicks?: number | null;
   tags?: string[];
   password?: string | null;
+  retargeting?: RetargetingPixels;
   ogTitle?: string;
   ogDescription?: string;
   ogImage?: string;
@@ -322,6 +328,23 @@ export async function createShortLink({
   const resolvedUserId = userId?.trim() || 'guest';
   const cleanPassword = password && password.trim() ? password.trim() : null;
 
+  let cleanRetargeting: RetargetingPixels | undefined = undefined;
+  if (retargeting) {
+    const meta = retargeting.metaPixelId?.trim();
+    const google = retargeting.googleTagId?.trim();
+    const tiktok = retargeting.tiktokPixelId?.trim();
+    const linkedin = retargeting.linkedinPartnerId?.trim();
+    const twitter = retargeting.twitterPixelId?.trim();
+    if (meta || google || tiktok || linkedin || twitter) {
+      cleanRetargeting = {};
+      if (meta) cleanRetargeting.metaPixelId = meta;
+      if (google) cleanRetargeting.googleTagId = google;
+      if (tiktok) cleanRetargeting.tiktokPixelId = tiktok;
+      if (linkedin) cleanRetargeting.linkedinPartnerId = linkedin;
+      if (twitter) cleanRetargeting.twitterPixelId = twitter;
+    }
+  }
+
   const newLink: LinkItem = {
     id: linkDocRef.id,
     userId: resolvedUserId,
@@ -335,8 +358,10 @@ export async function createShortLink({
     createdAt: now,
     updatedAt: now,
     expiresAt: expiresAt || null,
+    maxClicks: typeof maxClicks === 'number' && maxClicks > 0 ? maxClicks : null,
     password: cleanPassword,
     isPasswordProtected: Boolean(cleanPassword),
+    retargeting: cleanRetargeting,
     ogTitle: ogTitle?.trim() || undefined,
     ogDescription: ogDescription?.trim() || undefined,
     ogImage: ogImage?.trim() || undefined,
@@ -358,9 +383,12 @@ export async function createShortLink({
     createdAt: now,
     updatedAt: now,
     expiresAt: newLink.expiresAt,
+    maxClicks: newLink.maxClicks ?? null,
     password: newLink.password,
     isPasswordProtected: newLink.isPasswordProtected,
   };
+
+  if (cleanRetargeting) docPayload.retargeting = cleanRetargeting;
 
   if (newLink.ogTitle) docPayload.ogTitle = newLink.ogTitle;
   if (newLink.ogDescription) docPayload.ogDescription = newLink.ogDescription;
@@ -440,8 +468,10 @@ export async function getUserLinks(userId: string): Promise<LinkItem[]> {
         createdAt: data.createdAt || new Date().toISOString(),
         updatedAt: data.updatedAt || new Date().toISOString(),
         expiresAt: data.expiresAt || null,
+        maxClicks: typeof data.maxClicks === 'number' ? data.maxClicks : null,
         password: data.password || null,
         isPasswordProtected: Boolean(data.password && data.password.trim()),
+        retargeting: data.retargeting || undefined,
         ogTitle: data.ogTitle || undefined,
         ogDescription: data.ogDescription || undefined,
         ogImage: data.ogImage || undefined,
@@ -502,8 +532,10 @@ export async function getLinkByShortCode(shortCode: string): Promise<LinkItem | 
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
         expiresAt: data.expiresAt || null,
+        maxClicks: typeof data.maxClicks === 'number' ? data.maxClicks : null,
         password: data.password || null,
         isPasswordProtected: Boolean(data.password && data.password.trim()),
+        retargeting: data.retargeting || undefined,
         ogTitle: data.ogTitle || undefined,
         ogDescription: data.ogDescription || undefined,
         ogImage: data.ogImage || undefined,
@@ -541,8 +573,10 @@ export async function getLinkByShortCode(shortCode: string): Promise<LinkItem | 
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
         expiresAt: data.expiresAt || null,
+        maxClicks: typeof data.maxClicks === 'number' ? data.maxClicks : null,
         password: data.password || null,
         isPasswordProtected: Boolean(data.password && data.password.trim()),
+        retargeting: data.retargeting || undefined,
         ogTitle: data.ogTitle || undefined,
         ogDescription: data.ogDescription || undefined,
         ogImage: data.ogImage || undefined,
@@ -596,9 +630,11 @@ export async function getLinkById(linkId: string): Promise<LinkItem | null> {
           createdAt: data.createdAt,
           updatedAt: data.updatedAt,
           expiresAt: data.expiresAt || null,
+          maxClicks: typeof data.maxClicks === 'number' ? data.maxClicks : null,
           countries: data.countries || {},
           password: data.password || null,
           isPasswordProtected: Boolean(data.password && data.password.trim()),
+          retargeting: data.retargeting || undefined,
           ogTitle: data.ogTitle || undefined,
           ogDescription: data.ogDescription || undefined,
           ogImage: data.ogImage || undefined,
@@ -636,9 +672,11 @@ export async function getLinkById(linkId: string): Promise<LinkItem | null> {
           createdAt: data.createdAt,
           updatedAt: data.updatedAt,
           expiresAt: data.expiresAt || null,
+          maxClicks: typeof data.maxClicks === 'number' ? data.maxClicks : null,
           countries: data.countries || {},
           password: data.password || null,
           isPasswordProtected: Boolean(data.password && data.password.trim()),
+          retargeting: data.retargeting || undefined,
           ogTitle: data.ogTitle || undefined,
           ogDescription: data.ogDescription || undefined,
           ogImage: data.ogImage || undefined,
@@ -873,8 +911,10 @@ export function subscribeToUserLinks(
             createdAt: data.createdAt || new Date().toISOString(),
             updatedAt: data.updatedAt || new Date().toISOString(),
             expiresAt: data.expiresAt || null,
+            maxClicks: typeof data.maxClicks === 'number' ? data.maxClicks : null,
             password: data.password || null,
             isPasswordProtected: Boolean(data.password && data.password.trim()),
+            retargeting: data.retargeting || undefined,
           });
         });
 
@@ -929,8 +969,10 @@ export function subscribeToLink(
             createdAt: data.createdAt,
             updatedAt: data.updatedAt,
             expiresAt: data.expiresAt || null,
+            maxClicks: typeof data.maxClicks === 'number' ? data.maxClicks : null,
             password: data.password || null,
             isPasswordProtected: Boolean(data.password && data.password.trim()),
+            retargeting: data.retargeting || undefined,
             ogTitle: data.ogTitle || undefined,
             ogDescription: data.ogDescription || undefined,
             ogImage: data.ogImage || undefined,
@@ -1138,8 +1180,10 @@ export async function updateShortLink(
     title?: string;
     tags?: string[];
     expiresAt?: string | null;
+    maxClicks?: number | null;
     isActive?: boolean;
     password?: string | null;
+    retargeting?: RetargetingPixels | null;
     ogTitle?: string;
     ogDescription?: string;
     ogImage?: string;
@@ -1235,8 +1279,33 @@ export async function updateShortLink(
     if (updates.expiresAt !== undefined) {
       firestoreUpdates.expiresAt = updates.expiresAt; // Can be string or null
     }
+    if (updates.maxClicks !== undefined) {
+      firestoreUpdates.maxClicks = typeof updates.maxClicks === 'number' && updates.maxClicks > 0 ? updates.maxClicks : null;
+    }
     if (updates.password !== undefined) {
       firestoreUpdates.password = cleanUpdates.password;
+    }
+    if (updates.retargeting !== undefined) {
+      if (updates.retargeting === null) {
+        firestoreUpdates.retargeting = null;
+      } else {
+        const meta = updates.retargeting.metaPixelId?.trim();
+        const google = updates.retargeting.googleTagId?.trim();
+        const tiktok = updates.retargeting.tiktokPixelId?.trim();
+        const linkedin = updates.retargeting.linkedinPartnerId?.trim();
+        const twitter = updates.retargeting.twitterPixelId?.trim();
+        if (meta || google || tiktok || linkedin || twitter) {
+          firestoreUpdates.retargeting = {
+            ...(meta ? { metaPixelId: meta } : {}),
+            ...(google ? { googleTagId: google } : {}),
+            ...(tiktok ? { tiktokPixelId: tiktok } : {}),
+            ...(linkedin ? { linkedinPartnerId: linkedin } : {}),
+            ...(twitter ? { twitterPixelId: twitter } : {}),
+          };
+        } else {
+          firestoreUpdates.retargeting = null;
+        }
+      }
     }
 
     // If logged-in user is editing an unclaimed guest link, claim ownership
@@ -1272,8 +1341,12 @@ export async function updateShortLink(
         createdAt: freshData.createdAt || now,
         updatedAt: now,
         expiresAt: updates.expiresAt !== undefined ? updates.expiresAt : (freshData.expiresAt || null),
+        maxClicks: updates.maxClicks !== undefined ? (typeof updates.maxClicks === 'number' && updates.maxClicks > 0 ? updates.maxClicks : null) : (typeof freshData.maxClicks === 'number' ? freshData.maxClicks : null),
         password: finalPassword,
         isPasswordProtected: Boolean(finalPassword && finalPassword.trim()),
+        retargeting: updates.retargeting !== undefined
+          ? (updates.retargeting && Object.keys(updates.retargeting).length > 0 ? updates.retargeting : undefined)
+          : (freshData.retargeting || undefined),
       };
       upsertLocalLink(resolvedItem);
       targetLink = resolvedItem;

@@ -22,6 +22,7 @@ import {
   MousePointerClick,
   Edit3,
   Lock,
+  Gauge,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useAppRouter } from '../lib/router';
@@ -505,6 +506,24 @@ export const DashboardLinks: React.FC<DashboardLinksProps> = ({
                             title={`Expires on ${new Date(link.expiresAt).toLocaleString()}`}
                           >
                             Expires {new Date(link.expiresAt).toLocaleDateString()}
+                          </span>
+                        );
+                      })()}
+
+                      {typeof link.maxClicks === 'number' && link.maxClicks > 0 && (() => {
+                        const isLimitReached = (link.clicks || 0) >= link.maxClicks;
+                        return isLimitReached ? (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400 font-semibold uppercase">
+                            <Gauge className="w-2.5 h-2.5" />
+                            Quota Reached ({link.clicks}/{link.maxClicks})
+                          </span>
+                        ) : (
+                          <span
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-400 font-medium"
+                            title={`Click quota: ${link.clicks || 0} of ${link.maxClicks} clicks used`}
+                          >
+                            <Gauge className="w-2.5 h-2.5" />
+                            {link.clicks || 0}/{link.maxClicks} clicks
                           </span>
                         );
                       })()}
