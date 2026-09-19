@@ -1,6 +1,6 @@
 {
-  "name": "Shortee - URL Shortener",
-  "description": "Shortee (shortee.xyz) is a fast, modern URL shortener with rich destination Open Graph previews for social sharing (WhatsApp, Facebook, Twitter), custom aliases, link expiration, password protection, QR codes, and analytics.",
+  "name": "Shortee - Free URL Shortener & Custom Link Generator",
+  "description": "Shortee (shortee.xyz) is the 100% free URL shortener offering premium features without limits. Create branded custom links, smart QR codes, social preview cards, retargeting pixels, and real-time click analytics.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

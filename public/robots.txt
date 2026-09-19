@@ -1,0 +1,14 @@
+# robots.txt for Shortee (https://shortee.xyz)
+User-agent: *
+Allow: /
+Allow: /favicon.svg
+Allow: /og-image.jpg
+Allow: /assets/
+
+# Disallow authenticated, dashboard and private routes from search engine indexing
+Disallow: /dashboard
+Disallow: /dashboard/
+Disallow: /api/
+
+# Sitemap location
+Sitemap: https://shortee.xyz/sitemap.xml
