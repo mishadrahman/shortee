@@ -54,6 +54,18 @@ const routes = [
     description: 'Manage your Shortee account preferences, API keys, and custom domain settings.',
     canonical: 'https://shortee.xyz/dashboard/settings',
   },
+  {
+    path: 'privacy',
+    title: 'Privacy Policy - Shortee',
+    description: 'Read the Shortee Privacy Policy to understand how we protect user information, click metrics, and account credentials.',
+    canonical: 'https://shortee.xyz/privacy',
+  },
+  {
+    path: 'terms',
+    title: 'Terms of Service - Shortee',
+    description: 'Review the Shortee Terms of Service, anti-abuse standards, and acceptable usage guidelines for our URL shortening platform.',
+    canonical: 'https://shortee.xyz/terms',
+  },
 ];
 
 console.log('Generating static HTML files for SPA routes...');

@@ -93,16 +93,8 @@ function parseCurrentRoute(): RouteInfo {
   // Single segment path check for shortcode e.g. /xyz123 (ensuring not reserved)
   if (segments.length === 1) {
     const first = segments[0].toLowerCase();
-    const RESERVED_SET = new Set([
-      'dashboard',
-      'login',
-      'signup',
-      'forgot-password',
-      'settings',
-      'links',
-      'analytics',
-    ]);
-    if (!RESERVED_SET.has(first)) {
+    // Check against reserved non-shortcode paths
+    if (!RESERVED_ROUTES.has(first)) {
       isShortCodeRoute = true;
       shortCode = segments[0];
     }

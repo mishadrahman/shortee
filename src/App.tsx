@@ -12,6 +12,8 @@ import { DashboardOverview } from './pages/DashboardOverview';
 import { DashboardLinks } from './pages/DashboardLinks';
 import { LinkAnalyticsPage } from './pages/LinkAnalyticsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
+import { TermsPage } from './pages/TermsPage';
 import { RedirectHandler } from './pages/RedirectHandler';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -43,6 +45,12 @@ function AppContent() {
     }
     if (route.pathname === '/forgot-password') {
       return <AuthPages mode="forgot-password" />;
+    }
+    if (route.pathname === '/privacy' || route.pathname === '/privacy-policy') {
+      return <PrivacyPolicyPage />;
+    }
+    if (route.pathname === '/terms' || route.pathname === '/terms-of-service') {
+      return <TermsPage />;
     }
 
     // 2. Protected Dashboard routes
