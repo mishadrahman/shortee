@@ -36,8 +36,10 @@ jobs:
       - name: Build Production Bundle
         run: npm run build
 
-      - name: Copy index.html to 404.html for SPA Routing
-        run: cp dist/index.html dist/404.html
+      - name: Ensure Static Routes and SPA 404 Fallback
+        run: |
+          node scripts/generate-routes.js
+          cp dist/index.html dist/404.html
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

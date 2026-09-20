@@ -430,9 +430,25 @@ export default {
     const path = url.pathname.slice(1);
     const shortCode = path.split('/')[0];
 
-    // If reserved route or asset request, pass through
+    // If reserved route or asset request, pass through or fallback to 200 for SPA paths
     if (!shortCode || RESERVED_ROUTES.has(shortCode.toLowerCase()) || shortCode.includes('.') || shortCode.startsWith('@')) {
-      return fetch(request);
+      const originRes = await fetch(request);
+      // If origin returns 404 on an SPA page route (no file extension), serve index.html with 200 OK
+      if (originRes.status === 404 && !shortCode.includes('.')) {
+        const indexUrl = new URL('/index.html', request.url);
+        const indexRes = await fetch(new Request(indexUrl.toString(), request));
+        if (indexRes.ok) {
+          const headers = new Headers(indexRes.headers);
+          headers.set('content-type', 'text/html; charset=utf-8');
+          headers.set('cache-control', 'public, max-age=3600');
+          return new Response(indexRes.body, {
+            status: 200,
+            statusText: 'OK',
+            headers,
+          });
+        }
+      }
+      return originRes;
     }
 
     const link = await getLinkFromFirestore(shortCode);
